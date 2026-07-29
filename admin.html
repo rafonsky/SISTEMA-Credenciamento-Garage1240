@@ -88,9 +88,16 @@
     padding: 18px 20px;
     margin-bottom: 12px;
   }
+  .event-card { position: relative; }
   .event-card h3 { margin: 0 0 4px; font-size: 17px; }
   .event-card .meta { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
   .event-card .salas-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .event-card .card-actions {
+    position: absolute; top: 18px; right: 20px; display: flex; gap: 14px;
+  }
+  .event-card .card-actions a { font-size: 13px; color: var(--muted); text-decoration: none; cursor: pointer; }
+  .event-card .card-actions a:hover { color: var(--text); }
+  .event-card .card-actions a.danger:hover { color: var(--err); }
   .sala-tag {
     font-size: 12px;
     background: var(--panel2);
@@ -175,7 +182,8 @@
   <!-- ===================== MODAL: NOVO EVENTO ===================== -->
   <div class="modal-overlay hidden" id="modalOverlay">
     <div class="modal">
-      <h2>Novo evento</h2>
+      <h2 id="modalTitulo">Novo evento</h2>
+      <input type="hidden" id="eventoIdEditando" value="">
       <div class="field">
         <label>Nome do evento</label>
         <input type="text" id="eventoNome" placeholder="Ex: Congresso do Cuidado 2026">
@@ -329,12 +337,25 @@
         `<span class="sala-tag">${s.nome} · ${s.qtd_leitores} leitor(es) · ${modoLabel(s.modo_estacao)}</span>`
       ).join("");
       div.innerHTML = `
+        <div class="card-actions">
+          <a class="editar-evento" data-id="${ev.id}">Editar</a>
+          <a class="excluir-evento danger" data-id="${ev.id}" data-nome="${ev.nome}">Excluir</a>
+        </div>
         <h3>${ev.nome}</h3>
         <div class="meta">${formatarData(ev.data)}${ev.local ? " · " + ev.local : ""}</div>
         <div class="salas-list">${salasHtml || "<span class='sala-tag'>Nenhuma sala configurada</span>"}</div>
       `;
+      div.querySelector(".editar-evento").addEventListener("click", () => abrirModalEdicao(ev));
+      div.querySelector(".excluir-evento").addEventListener("click", () => excluirEvento(ev.id, ev.nome));
       listEl.appendChild(div);
     });
+  }
+
+  async function excluirEvento(id, nome) {
+    const confirmado = confirm(`Excluir o evento "${nome}"? Isso remove a configuração do evento (nome, salas, branding). Participantes e check-ins já registrados NÃO são apagados automaticamente — se precisar removê-los também, avise.`);
+    if (!confirmado) return;
+    await db.collection("eventos").doc(id).delete();
+    carregarEventos();
   }
 
   function modoLabel(modo) {
@@ -352,6 +373,8 @@
   const salasContainer = document.getElementById("salasContainer");
 
   document.getElementById("btnNovoEvento").addEventListener("click", () => {
+    document.getElementById("modalTitulo").textContent = "Novo evento";
+    document.getElementById("eventoIdEditando").value = "";
     document.getElementById("eventoNome").value = "";
     document.getElementById("eventoData").value = "";
     document.getElementById("eventoLocal").value = "";
@@ -361,18 +384,31 @@
     modalOverlay.classList.remove("hidden");
   });
 
+  function abrirModalEdicao(ev) {
+    document.getElementById("modalTitulo").textContent = "Editar evento";
+    document.getElementById("eventoIdEditando").value = ev.id;
+    document.getElementById("eventoNome").value = ev.nome || "";
+    document.getElementById("eventoData").value = ev.data || "";
+    document.getElementById("eventoLocal").value = ev.local || "";
+    salasContainer.innerHTML = "";
+    document.getElementById("eventoError").classList.add("hidden");
+    (ev.salas && ev.salas.length ? ev.salas : [{}]).forEach(s => adicionarLinhaSala(s));
+    modalOverlay.classList.remove("hidden");
+  }
+
   document.getElementById("btnCancelarEvento").addEventListener("click", () => {
     modalOverlay.classList.add("hidden");
   });
 
   document.getElementById("btnAddSala").addEventListener("click", () => adicionarLinhaSala());
 
-  function adicionarLinhaSala() {
+  function adicionarLinhaSala(sala) {
+    sala = sala || {};
     const row = document.createElement("div");
     row.className = "sala-row";
     row.innerHTML = `
-      <input type="text" placeholder="Nome da sala" class="sala-nome">
-      <input type="number" min="1" value="1" class="sala-qtd">
+      <input type="text" placeholder="Nome da sala" class="sala-nome" value="${sala.nome || ""}">
+      <input type="number" min="1" value="${sala.qtd_leitores || 1}" class="sala-qtd">
       <select class="sala-modo">
         <option value="dropdown">Seleção manual</option>
         <option value="link">Link direto</option>
@@ -380,6 +416,7 @@
       </select>
       <button type="button" class="remove-sala">✕</button>
     `;
+    if (sala.modo_estacao) row.querySelector(".sala-modo").value = sala.modo_estacao;
     row.querySelector(".remove-sala").addEventListener("click", () => row.remove());
     salasContainer.appendChild(row);
   }
@@ -403,13 +440,19 @@
       modo_estacao: row.querySelector(".sala-modo").value,
     }));
 
+    const idEditando = document.getElementById("eventoIdEditando").value;
+
     try {
-      await db.collection("eventos").add({
-        nome, data, local, salas,
-        branding: { logo_cliente_url: null, logos_patrocinadores: [], cor_primaria: null, layout_id: null },
-        criado_em: firebase.firestore.FieldValue.serverTimestamp(),
-        criado_por: usuarioAtual.uid,
-      });
+      if (idEditando) {
+        await db.collection("eventos").doc(idEditando).update({ nome, data, local, salas });
+      } else {
+        await db.collection("eventos").add({
+          nome, data, local, salas,
+          branding: { logo_cliente_url: null, logos_patrocinadores: [], cor_primaria: null, layout_id: null },
+          criado_em: firebase.firestore.FieldValue.serverTimestamp(),
+          criado_por: usuarioAtual.uid,
+        });
+      }
       modalOverlay.classList.add("hidden");
       carregarEventos();
     } catch (e) {
