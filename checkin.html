@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Check-in de Sala — Congresso do Cuidado</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d24;
+    --border: #2a2e38;
+    --text: #eef0f3;
+    --muted: #8b93a3;
+    --ok: #2fbf71;
+    --ok-bg: #10281c;
+    --err: #e0533d;
+    --err-bg: #2b1512;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  .header {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--muted);
+  }
+  .sala-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sala-select select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .status-pill {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .status-pill.online { color: var(--ok); border-color: var(--ok); }
+  .status-pill.offline { color: var(--err); border-color: var(--err); }
+
+  .scan-input {
+    width: 100%;
+    max-width: 720px;
+    padding: 16px 18px;
+    font-size: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+  .scan-input:focus { outline: 2px solid var(--accent); }
+
+  .feedback {
+    width: 100%;
+    max-width: 720px;
+    min-height: 220px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .feedback.ok { background: var(--ok-bg); border-color: var(--ok); }
+  .feedback.err { background: var(--err-bg); border-color: var(--err); }
+
+  .feedback .icon { font-size: 56px; margin-bottom: 12px; }
+  .feedback .nome { font-size: 30px; font-weight: 700; margin: 0 0 4px; }
+  .feedback .detalhe { font-size: 16px; color: var(--muted); margin: 0; }
+  .feedback.ok .detalhe, .feedback.err .detalhe { color: inherit; opacity: 0.85; }
+  .feedback .hint { font-size: 15px; color: var(--muted); }
+
+  .log {
+    width: 100%;
+    max-width: 720px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .log table { width: 100%; border-collapse: collapse; }
+  .log th, .log td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .log th { font-weight: 600; color: var(--text); }
+  .counter { margin-top: 10px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Check-in de Sala</h1>
+    <div class="sala-select">
+      <span class="status-pill" id="statusPill">configurando…</span>
+      <select id="salaSelect">
+        <option value="sala-1">Sala 1</option>
+        <option value="sala-2">Sala 2</option>
+      </select>
+    </div>
+  </div>
+
+  <input type="text" id="scanInput" class="scan-input" placeholder="Aponte o leitor aqui e escaneie o QR do crachá…" autofocus autocomplete="off">
+
+  <div class="feedback" id="feedback">
+    <div class="hint">Aguardando leitura…</div>
+  </div>
+
+  <div class="counter" id="counter">0 check-ins registrados nesta sala hoje</div>
+
+  <div class="log">
+    <table>
+      <thead><tr><th>Horário</th><th>Nome</th><th>Órgão</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+
+<!-- ====================== FIREBASE ====================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+  // TODO: cole aqui a config do MESMO projeto Firebase usado no
+  // sistema de O.S. (Console Firebase > Configurações do projeto > SDK).
+  const firebaseConfig = {
+    apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
+    authDomain: "checkin-de-participantes.firebaseapp.com",
+    projectId: "checkin-de-participantes",
+    storageBucket: "checkin-de-participantes.firebasestorage.app",
+    messagingSenderId: "146226402909",
+    appId: "1:146226402909:web:50f7f5c95a366894439fb4"
+  };
+
+  const PARTICIPANTES_COLLECTION = "congresso_participantes";
+  const CHECKINS_COLLECTION = "congresso_checkins";
+
+  let db = null;
+  let salaAtual = document.getElementById("salaSelect").value;
+  let checkinsHoje = 0;
+
+  const statusPill = document.getElementById("statusPill");
+  const scanInput = document.getElementById("scanInput");
+  const feedback = document.getElementById("feedback");
+  const logBody = document.getElementById("logBody");
+  const counter = document.getElementById("counter");
+
+  function setStatus(ok, texto) {
+    statusPill.textContent = texto;
+    statusPill.className = "status-pill " + (ok ? "online" : "offline");
+  }
+
+  async function initFirebase() {
+    try {
+      if (firebaseConfig.apiKey === "COLE_AQUI") {
+        setStatus(false, "config pendente");
+        return;
+      }
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      await firebase.auth().signInAnonymously();
+      setStatus(true, "conectado");
+    } catch (e) {
+      console.error(e);
+      setStatus(false, "erro de conexão");
+    }
+  }
+
+  document.getElementById("salaSelect").addEventListener("change", (e) => {
+    salaAtual = e.target.value;
+    checkinsHoje = 0;
+    logBody.innerHTML = "";
+    updateCounter();
+  });
+
+  function updateCounter() {
+    counter.textContent = `${checkinsHoje} check-in(s) registrados em ${salaAtual} nesta sessão`;
+  }
+
+  function showFeedback(type, iconChar, nome, detalhe) {
+    feedback.className = "feedback " + type;
+    feedback.innerHTML = `
+      <div class="icon">${iconChar}</div>
+      <div class="nome">${nome}</div>
+      <div class="detalhe">${detalhe}</div>
+    `;
+  }
+
+  function logRow(nome, orgao) {
+    const hora = new Date().toLocaleTimeString('pt-BR');
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${hora}</td><td>${nome}</td><td>${orgao || "-"}</td>`;
+    logBody.prepend(tr);
+  }
+
+  async function processarLeitura(codigo) {
+    codigo = codigo.trim();
+    if (!codigo) return;
+
+    if (!db) {
+      showFeedback("err", "⚠", "Sem conexão", "Configure o Firebase antes de usar.");
+      return;
+    }
+
+    try {
+      const doc = await db.collection(PARTICIPANTES_COLLECTION).doc(codigo).get();
+
+      if (!doc.exists) {
+        showFeedback("err", "✕", "Código não encontrado", codigo);
+        return;
+      }
+
+      const p = doc.data();
+      const nomeExibicao = p.nome_cracha || p.nome || codigo;
+
+      await db.collection(CHECKINS_COLLECTION).add({
+        participante_id: codigo,
+        nome: nomeExibicao,
+        orgao: p.orgao || "",
+        sala: salaAtual,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+
+      showFeedback("ok", "✓", nomeExibicao, p.orgao || "");
+      logRow(nomeExibicao, p.orgao);
+      checkinsHoje++;
+      updateCounter();
+    } catch (e) {
+      console.error(e);
+      showFeedback("err", "⚠", "Erro ao registrar", "Tente novamente.");
+    }
+  }
+
+  scanInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const valor = scanInput.value;
+      scanInput.value = "";
+      processarLeitura(valor);
+    }
+  });
+
+  // Mantém o foco sempre no campo de leitura, mesmo se o operador clicar fora
+  document.addEventListener("click", () => scanInput.focus());
+  setInterval(() => { if (document.activeElement !== scanInput) scanInput.focus(); }, 2000);
+
+  initFirebase();
+  updateCounter();
+</script>
+
+</body>
+</html>

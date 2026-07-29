@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Papel/permissões de cada usuário logado
+    match /usuarios/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false; // só via script de admin (criar_usuario.py)
+    }
+
+    // Eventos: qualquer usuário autenticado pode ler a lista (o filtro
+    // de quais eventos aparecem é feito no app, conforme o papel);
+    // criação/edição permitida a qualquer usuário autenticado por
+    // enquanto (refinar para checar papel == master quando necessário)
+    match /eventos/{eventoId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Participantes e check-ins, organizados por evento
+    match /participantes/{eventoId}/lista/{codigo} {
+      allow read: if request.auth != null;
+      allow write: if false; // importação só via script/admin
+    }
+
+    match /checkins/{eventoId}/logs/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Coleções antigas (compatibilidade com o protótipo inicial)
+    match /congresso_participantes/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /congresso_checkins/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

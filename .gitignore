@@ -1,0 +1,13 @@
+# Credenciais — NUNCA versionar, dão acesso total ao Firebase
+*firebase-adminsdk*.json
+chave-admin.json
+
+# Dados reais de participantes — contém PII (nome, e-mail, CPF, etc.)
+participantes.json
+relatorio.xlsx
+*.xlsx
+*.csv
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
