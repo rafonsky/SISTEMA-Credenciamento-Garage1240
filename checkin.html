@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Check-in de Sala — Congresso do Cuidado</title>
+<title>Check-in de Sala</title>
 <style>
   :root {
     --bg: #0f1115;
     --panel: #1a1d24;
+    --panel2: #22262f;
     --border: #2a2e38;
     --text: #eef0f3;
     --muted: #8b93a3;
@@ -15,7 +16,10 @@
     --ok-bg: #10281c;
     --err: #e0533d;
     --err-bg: #2b1512;
+    --warn: #d9a441;
+    --warn-bg: #2b2211;
     --accent: #4f8cff;
+    --accent-hover: #3d7ae0;
   }
   * { box-sizing: border-box; }
   body {
@@ -29,55 +33,146 @@
     align-items: center;
     padding: 24px 16px;
   }
+  .hidden { display: none !important; }
+
+  /* ---------- telas centralizadas (loading / erro / seletor / pin / login) ---------- */
+  .center-screen {
+    min-height: 80vh;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  .center-screen h1 { font-size: 19px; margin: 0; }
+  .center-screen p { color: var(--muted); font-size: 14px; margin: 0; }
+  .center-screen .box {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .field { margin-bottom: 14px; text-align: left; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  .btn.small { padding: 8px 14px; font-size: 13px; width: auto; }
+  .btn + .btn { margin-top: 10px; }
+  .error-msg { color: var(--err); font-size: 13px; margin-top: 10px; }
+  .sala-option {
+    width: 100%;
+    text-align: left;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+  .sala-option:hover { border-color: var(--accent); }
+  .sala-option small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  /* ---------- tela principal de check-in ---------- */
+  #telaCheckin { width: 100%; display: flex; flex-direction: column; align-items: center; }
   .header {
     width: 100%;
     max-width: 720px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-  }
-  .header h1 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0;
-    color: var(--muted);
-  }
-  .sala-select {
-    display: flex;
-    align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
+    margin-bottom: 16px;
   }
-  .sala-select select {
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 14px;
-  }
+  .header .titulo h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .header .titulo small { color: var(--muted); font-size: 13px; }
+  .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .header-actions a { color: var(--muted); font-size: 13px; text-decoration: none; cursor: pointer; }
+  .header-actions a:hover { color: var(--text); }
   .status-pill {
     font-size: 12px;
     padding: 4px 10px;
     border-radius: 999px;
     border: 1px solid var(--border);
     color: var(--muted);
+    white-space: nowrap;
   }
   .status-pill.online { color: var(--ok); border-color: var(--ok); }
   .status-pill.offline { color: var(--err); border-color: var(--err); }
+  .pending-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    cursor: pointer;
+    white-space: nowrap;
+  }
 
-  .scan-input {
+  .scan-row {
     width: 100%;
     max-width: 720px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .scan-input {
+    flex: 1;
     padding: 16px 18px;
     font-size: 16px;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 12px;
     color: var(--text);
-    margin-bottom: 24px;
   }
   .scan-input:focus { outline: 2px solid var(--accent); }
+  .btn-camera {
+    padding: 0 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-camera.ativa { border-color: var(--accent); color: var(--accent); }
+
+  #cameraBox {
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  #cameraView { width: 100%; }
 
   .feedback {
     width: 100%;
@@ -96,12 +191,16 @@
   }
   .feedback.ok { background: var(--ok-bg); border-color: var(--ok); }
   .feedback.err { background: var(--err-bg); border-color: var(--err); }
+  .feedback.warn { background: var(--warn-bg); border-color: var(--warn); }
 
   .feedback .icon { font-size: 56px; margin-bottom: 12px; }
   .feedback .nome { font-size: 30px; font-weight: 700; margin: 0 0 4px; }
   .feedback .detalhe { font-size: 16px; color: var(--muted); margin: 0; }
-  .feedback.ok .detalhe, .feedback.err .detalhe { color: inherit; opacity: 0.85; }
+  .feedback.ok .detalhe, .feedback.err .detalhe, .feedback.warn .detalhe { color: inherit; opacity: 0.85; }
   .feedback .hint { font-size: 15px; color: var(--muted); }
+  .warn-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+  .counter { margin-top: 10px; font-size: 13px; color: var(--muted); }
 
   .log {
     width: 100%;
@@ -113,44 +212,108 @@
   .log table { width: 100%; border-collapse: collapse; }
   .log th, .log td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
   .log th { font-weight: 600; color: var(--text); }
-  .counter { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .log td.pendente { color: var(--warn); }
 </style>
 </head>
 <body>
 
-  <div class="header">
-    <h1>Check-in de Sala</h1>
-    <div class="sala-select">
-      <span class="status-pill" id="statusPill">configurando…</span>
-      <select id="salaSelect">
-        <option value="sala-1">Sala 1</option>
-        <option value="sala-2">Sala 2</option>
-      </select>
+  <!-- ===================== CARREGANDO ===================== -->
+  <div id="telaCarregando" class="center-screen">
+    <p>Carregando…</p>
+  </div>
+
+  <!-- ===================== ERRO ===================== -->
+  <div id="telaErro" class="center-screen hidden">
+    <div class="box">
+      <h1>Não foi possível abrir o check-in</h1>
+      <p id="telaErroMsg"></p>
     </div>
   </div>
 
-  <input type="text" id="scanInput" class="scan-input" placeholder="Aponte o leitor aqui e escaneie o QR do crachá…" autofocus autocomplete="off">
-
-  <div class="feedback" id="feedback">
-    <div class="hint">Aguardando leitura…</div>
+  <!-- ===================== SELETOR DE SALA ===================== -->
+  <div id="telaSeletorSala" class="center-screen hidden">
+    <h1 id="seletorEventoNome">Selecione a sala</h1>
+    <div class="box" id="seletorSalaBox"></div>
   </div>
 
-  <div class="counter" id="counter">0 check-ins registrados nesta sala hoje</div>
+  <!-- ===================== PIN DA SALA ===================== -->
+  <div id="telaPin" class="center-screen hidden">
+    <div class="box">
+      <h1 id="pinSalaNome">Sala</h1>
+      <p style="margin-bottom:16px;">Digite o PIN desta sala pra destravar o check-in.</p>
+      <div class="field">
+        <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="PIN">
+      </div>
+      <button class="btn" id="btnPinEntrar">Entrar</button>
+      <div class="error-msg hidden" id="pinError"></div>
+    </div>
+  </div>
 
-  <div class="log">
-    <table>
-      <thead><tr><th>Horário</th><th>Nome</th><th>Órgão</th></tr></thead>
-      <tbody id="logBody"></tbody>
-    </table>
+  <!-- ===================== LOGIN POR CONTA ===================== -->
+  <div id="telaLoginConta" class="center-screen hidden">
+    <div class="box">
+      <h1 id="loginContaSalaNome">Sala</h1>
+      <p style="margin-bottom:16px;">Faça login com sua conta do painel pra destravar esta sala.</p>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="loginContaEmail" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input type="password" id="loginContaSenha" placeholder="••••••••">
+      </div>
+      <button class="btn" id="btnLoginContaEntrar">Entrar</button>
+      <button class="btn secondary" id="btnLoginContaGoogle">Entrar com Google</button>
+      <div class="error-msg hidden" id="loginContaError"></div>
+    </div>
+  </div>
+
+  <!-- ===================== CHECK-IN ===================== -->
+  <div id="telaCheckin" class="hidden">
+    <div class="header">
+      <div class="titulo">
+        <h1 id="checkinEventoNome">Evento</h1>
+        <small id="checkinSalaNome">Sala</small>
+      </div>
+      <div class="header-actions">
+        <span class="status-pill" id="statusPill">conectando…</span>
+        <span class="pending-badge hidden" id="pendingBadge"></span>
+        <a id="btnTrocarSala" class="hidden">Trocar sala</a>
+        <a id="btnSairConta" class="hidden">Sair</a>
+      </div>
+    </div>
+
+    <div class="scan-row">
+      <input type="text" id="scanInput" class="scan-input" placeholder="Aponte o leitor aqui e escaneie o QR do crachá…" autofocus autocomplete="off">
+      <button type="button" class="btn-camera" id="btnCamera">📷 Câmera</button>
+    </div>
+
+    <div id="cameraBox" class="hidden">
+      <div id="cameraView"></div>
+    </div>
+
+    <div class="feedback" id="feedback">
+      <div class="hint">Aguardando leitura…</div>
+    </div>
+
+    <div class="counter" id="counter">0 check-ins registrados nesta sessão</div>
+
+    <div class="log">
+      <table>
+        <thead><tr><th>Horário</th><th>Nome</th><th>Órgão</th><th></th></tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
   </div>
 
 <!-- ====================== FIREBASE ====================== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<!-- Leitura de QR por câmera. Versão fixada (não @latest) pra evitar que o
+     conteúdo servido pelo CDN mude sem a gente saber. -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-  // TODO: cole aqui a config do MESMO projeto Firebase usado no
-  // sistema de O.S. (Console Firebase > Configurações do projeto > SDK).
   const firebaseConfig = {
     apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
     authDomain: "checkin-de-participantes.firebaseapp.com",
@@ -159,15 +322,188 @@
     messagingSenderId: "146226402909",
     appId: "1:146226402909:web:50f7f5c95a366894439fb4"
   };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-  const PARTICIPANTES_COLLECTION = "congresso_participantes";
-  const CHECKINS_COLLECTION = "congresso_checkins";
+  const DEBOUNCE_MS = 4000;
 
-  let db = null;
-  let salaAtual = document.getElementById("salaSelect").value;
-  let checkinsHoje = 0;
+  const params = new URLSearchParams(location.search);
+  const eventoId = params.get("evento");
+  let salaIdDaUrl = params.get("sala");
 
+  let eventoAtual = null;
+  let salaAtual = null;
+  let usuarioConta = null; // { uid, papel, eventos_permitidos } quando modo login/conta
+
+  let participantesCache = new Map();
+  let logHojeCache = new Map(); // codigo -> [Date,...]
+  let ultimaLeituraPorCodigo = new Map();
+  let checkinsSessao = 0;
+
+  // ---------- helpers de tela ----------
+  const telas = ["telaCarregando", "telaErro", "telaSeletorSala", "telaPin", "telaLoginConta", "telaCheckin"];
+  function mostrarTela(id) {
+    telas.forEach(t => document.getElementById(t).classList.toggle("hidden", t !== id));
+  }
+
+  function mostrarErro(msg) {
+    document.getElementById("telaErroMsg").textContent = msg;
+    mostrarTela("telaErro");
+  }
+
+  // ---------- inicialização ----------
+  async function iniciar() {
+    if (!eventoId) {
+      mostrarErro('Este link está incompleto: falta o parâmetro "evento" na URL. Peça o link correto no painel administrativo.');
+      return;
+    }
+
+    try {
+      await auth.signInAnonymously();
+    } catch (e) {
+      mostrarErro("Não foi possível conectar ao Firebase: " + e.message);
+      return;
+    }
+
+    try {
+      const doc = await db.collection("eventos").doc(eventoId).get();
+      if (!doc.exists) {
+        mostrarErro("Evento não encontrado. Verifique o link.");
+        return;
+      }
+      eventoAtual = { id: doc.id, ...doc.data() };
+    } catch (e) {
+      mostrarErro("Não foi possível carregar o evento. Verifique sua conexão e tente novamente.");
+      return;
+    }
+
+    if (salaIdDaUrl) {
+      salaAtual = (eventoAtual.salas || []).find(s => s.id === salaIdDaUrl);
+      if (!salaAtual) {
+        mostrarErro("Sala não encontrada para este evento. Verifique o link.");
+        return;
+      }
+      resolverAcessoSala();
+    } else {
+      mostrarSeletorSala();
+    }
+  }
+
+  function mostrarSeletorSala() {
+    document.getElementById("seletorEventoNome").textContent = eventoAtual.nome || "Selecione a sala";
+    const box = document.getElementById("seletorSalaBox");
+    box.innerHTML = "";
+    const candidatas = (eventoAtual.salas || []).filter(s => s.modo_estacao !== "link");
+    if (!candidatas.length) {
+      box.innerHTML = "<p>Nenhuma sala disponível pra seleção manual neste evento.</p>";
+      mostrarTela("telaSeletorSala");
+      return;
+    }
+    candidatas.forEach(s => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "sala-option";
+      btn.innerHTML = `${s.nome}` + (s.modo_estacao === "login" ? "<small>requer login</small>" : "");
+      btn.addEventListener("click", () => {
+        salaAtual = s;
+        resolverAcessoSala();
+      });
+      box.appendChild(btn);
+    });
+    mostrarTela("telaSeletorSala");
+  }
+
+  function resolverAcessoSala() {
+    if (salaAtual.modo_estacao === "login") {
+      const metodo = salaAtual.login_metodo || "pin";
+      if (metodo === "conta") {
+        mostrarTelaLoginConta();
+      } else {
+        mostrarTelaPin();
+      }
+    } else {
+      iniciarCheckin();
+    }
+  }
+
+  // ---------- PIN ----------
+  function pinKey() { return `pin_ok_${eventoId}_${salaAtual.id}`; }
+
+  function mostrarTelaPin() {
+    if (localStorage.getItem(pinKey()) === "true") {
+      iniciarCheckin();
+      return;
+    }
+    document.getElementById("pinSalaNome").textContent = salaAtual.nome;
+    document.getElementById("pinInput").value = "";
+    document.getElementById("pinError").classList.add("hidden");
+    mostrarTela("telaPin");
+    document.getElementById("pinInput").focus();
+  }
+
+  document.getElementById("btnPinEntrar").addEventListener("click", verificarPin);
+  document.getElementById("pinInput").addEventListener("keydown", (e) => { if (e.key === "Enter") verificarPin(); });
+
+  function verificarPin() {
+    const digitado = document.getElementById("pinInput").value.trim();
+    if (digitado && digitado === String(salaAtual.pin || "")) {
+      localStorage.setItem(pinKey(), "true");
+      iniciarCheckin();
+    } else {
+      document.getElementById("pinError").textContent = "PIN incorreto.";
+      document.getElementById("pinError").classList.remove("hidden");
+    }
+  }
+
+  // ---------- login por conta ----------
+  const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+  function mostrarTelaLoginConta() {
+    document.getElementById("loginContaSalaNome").textContent = salaAtual.nome;
+    document.getElementById("loginContaError").classList.add("hidden");
+    mostrarTela("telaLoginConta");
+  }
+
+  async function autenticarConta(promessaLogin) {
+    const errEl = document.getElementById("loginContaError");
+    errEl.classList.add("hidden");
+    try {
+      await promessaLogin();
+      const user = auth.currentUser;
+      const doc = await db.collection("usuarios").doc(user.uid).get();
+      if (!doc.exists) {
+        throw new Error("Usuário sem permissão cadastrada. Contate o Master.");
+      }
+      const dados = doc.data();
+      const permitido = dados.papel === "master" || (dados.eventos_permitidos || []).includes(eventoId);
+      if (!permitido) {
+        throw new Error("Sua conta não tem permissão pra este evento.");
+      }
+      usuarioConta = { uid: user.uid, ...dados };
+      iniciarCheckin();
+    } catch (e) {
+      errEl.textContent = e.message || "Erro ao entrar.";
+      errEl.classList.remove("hidden");
+      if (auth.currentUser && auth.currentUser.isAnonymous === false && !usuarioConta) {
+        await auth.signInAnonymously().catch(() => {});
+      }
+    }
+  }
+
+  document.getElementById("btnLoginContaEntrar").addEventListener("click", () => {
+    const email = document.getElementById("loginContaEmail").value.trim();
+    const senha = document.getElementById("loginContaSenha").value;
+    autenticarConta(() => auth.signInWithEmailAndPassword(email, senha));
+  });
+
+  document.getElementById("btnLoginContaGoogle").addEventListener("click", () => {
+    autenticarConta(() => auth.signInWithPopup(googleProvider));
+  });
+
+  // ---------- tela principal de check-in ----------
   const statusPill = document.getElementById("statusPill");
+  const pendingBadge = document.getElementById("pendingBadge");
   const scanInput = document.getElementById("scanInput");
   const feedback = document.getElementById("feedback");
   const logBody = document.getElementById("logBody");
@@ -178,35 +514,184 @@
     statusPill.className = "status-pill " + (ok ? "online" : "offline");
   }
 
-  async function initFirebase() {
+  async function iniciarCheckin() {
+    document.getElementById("checkinEventoNome").textContent = eventoAtual.nome || "";
+    document.getElementById("checkinSalaNome").textContent = salaAtual.nome || "";
+
+    if (!salaIdDaUrl) {
+      const link = document.getElementById("btnTrocarSala");
+      link.classList.remove("hidden");
+      link.textContent = "Trocar sala";
+      link.addEventListener("click", () => {
+        if (salaAtual.modo_estacao === "login" && (salaAtual.login_metodo || "pin") === "pin") {
+          localStorage.removeItem(pinKey());
+        }
+        location.reload();
+      });
+    }
+    if (salaAtual.modo_estacao === "login" && (salaAtual.login_metodo || "pin") === "conta") {
+      const link = document.getElementById("btnSairConta");
+      link.classList.remove("hidden");
+      link.textContent = "Sair (" + (usuarioConta.nome || usuarioConta.email || "") + ")";
+      link.addEventListener("click", () => { auth.signOut().then(() => location.reload()); });
+    }
+
+    mostrarTela("telaCheckin");
+    setStatus(navigator.onLine, "carregando participantes…");
+
+    await prefetchParticipantes();
+    await iniciarListenerLogHoje();
+    atualizarBadgePendentes();
+
+    window.addEventListener("online", () => { atualizarStatusOnline(); sincronizarPendentes(); });
+    window.addEventListener("offline", atualizarStatusOnline);
+    // Verifica a virada de dia pra reconectar o listener com o novo início do dia
+    // (o listener em si já é tempo real; isso só cuida do corte de meia-noite).
+    setInterval(() => {
+      if (chaveDia(inicioDoDia()) !== logHojeDia) iniciarListenerLogHoje();
+    }, 60 * 1000);
+
+    scanInput.focus();
+  }
+
+  function atualizarStatusOnline() {
+    const pendentes = contarPendentes();
+    setStatus(navigator.onLine, (navigator.onLine ? "conectado" : "offline") + ` · ${participantesCache.size} participantes`);
+    atualizarBadgePendentes();
+  }
+
+  // ---------- cache de participantes (offline-first) ----------
+  function participantesCacheKey() { return `participantes_cache_${eventoId}`; }
+
+  async function prefetchParticipantes() {
     try {
-      if (firebaseConfig.apiKey === "COLE_AQUI") {
-        setStatus(false, "config pendente");
-        return;
-      }
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-      await firebase.auth().signInAnonymously();
-      setStatus(true, "conectado");
+      const snap = await db.collection("participantes").doc(eventoId).collection("lista").get();
+      participantesCache.clear();
+      snap.forEach(d => participantesCache.set(d.id, d.data()));
+      localStorage.setItem(participantesCacheKey(), JSON.stringify([...participantesCache.entries()]));
+      setStatus(true, `conectado · ${participantesCache.size} participantes`);
     } catch (e) {
-      console.error(e);
-      setStatus(false, "erro de conexão");
+      console.warn("Falha ao carregar participantes, usando cache local:", e.message);
+      const cache = localStorage.getItem(participantesCacheKey());
+      if (cache) {
+        participantesCache = new Map(JSON.parse(cache));
+        setStatus(false, `offline · ${participantesCache.size} participantes (cache)`);
+      } else {
+        setStatus(false, "offline · sem cache de participantes");
+      }
     }
   }
 
-  document.getElementById("salaSelect").addEventListener("change", (e) => {
-    salaAtual = e.target.value;
-    checkinsHoje = 0;
-    logBody.innerHTML = "";
-    updateCounter();
-  });
+  // ---------- histórico de check-ins de hoje (pra aviso de duplicidade) ----------
+  // Mantido em tempo real via onSnapshot (em vez de reconsultar de tempos em
+  // tempos), assim um segundo leitor na mesma sala aparece quase na hora, não
+  // só depois de um intervalo de polling.
+  let logHojeUnsubscribe = null;
+  let logHojeDia = null;
 
-  function updateCounter() {
-    counter.textContent = `${checkinsHoje} check-in(s) registrados em ${salaAtual} nesta sessão`;
+  function inicioDoDia() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   }
 
-  function showFeedback(type, iconChar, nome, detalhe) {
-    feedback.className = "feedback " + type;
+  function chaveDia(d) {
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+
+  function iniciarListenerLogHoje() {
+    if (logHojeUnsubscribe) {
+      logHojeUnsubscribe();
+      logHojeUnsubscribe = null;
+    }
+    const inicio = inicioDoDia();
+    logHojeDia = chaveDia(inicio);
+
+    return new Promise((resolve) => {
+      let primeira = true;
+      logHojeUnsubscribe = db.collection("checkins").doc(eventoId).collection("logs")
+        .where("sala", "==", salaAtual.id)
+        .where("timestamp", ">=", inicio)
+        .onSnapshot(snap => {
+          const novo = new Map();
+          snap.forEach(d => {
+            const data = d.data();
+            const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+            const arr = novo.get(data.participante_id) || [];
+            arr.push(ts);
+            novo.set(data.participante_id, arr);
+          });
+          // Preserva registros de hoje feitos nesta sessão que ainda não foram
+          // sincronizados (descarta os de dias anteriores, caso a estação
+          // fique ligada de um dia pro outro).
+          logHojeCache.forEach((datas, codigo) => {
+            if (novo.has(codigo)) return;
+            const aindaHoje = datas.filter(dt => dt >= inicio);
+            if (aindaHoje.length) novo.set(codigo, aindaHoje);
+          });
+          logHojeCache = novo;
+          if (primeira) { primeira = false; resolve(); }
+        }, e => {
+          console.warn("Não foi possível acompanhar o histórico de hoje em tempo real (pode faltar um índice composto no Firestore para sala+timestamp):", e.message);
+          if (primeira) { primeira = false; resolve(); }
+        });
+    });
+  }
+
+  // ---------- fila offline ----------
+  function pendentesKey() { return `pendentes_${eventoId}_${salaAtual.id}`; }
+
+  function listarPendentes() {
+    return JSON.parse(localStorage.getItem(pendentesKey()) || "[]");
+  }
+  function salvarPendentes(lista) {
+    localStorage.setItem(pendentesKey(), JSON.stringify(lista));
+  }
+  function contarPendentes() { return listarPendentes().length; }
+
+  function atualizarBadgePendentes() {
+    const n = contarPendentes();
+    if (n > 0) {
+      pendingBadge.textContent = `${n} pendente(s) · sincronizar`;
+      pendingBadge.classList.remove("hidden");
+    } else {
+      pendingBadge.classList.add("hidden");
+    }
+  }
+
+  pendingBadge.addEventListener("click", sincronizarPendentes);
+
+  async function sincronizarPendentes() {
+    const lista = listarPendentes();
+    if (!lista.length) return;
+    const restantes = [];
+    let sucesso = 0;
+    for (const registro of lista) {
+      try {
+        await db.collection("checkins").doc(eventoId).collection("logs").add({
+          ...registro,
+          timestamp: firebase.firestore.Timestamp.fromDate(new Date(registro.timestamp_local)),
+        });
+        sucesso++;
+      } catch (e) {
+        restantes.push(registro);
+      }
+    }
+    salvarPendentes(restantes);
+    atualizarBadgePendentes();
+    if (sucesso > 0) {
+      logBody.querySelectorAll("td.pendente").forEach(td => { td.textContent = ""; td.classList.remove("pendente"); });
+    }
+  }
+
+  // ---------- leitura / registro ----------
+  function resetFeedback() {
+    feedback.className = "feedback";
+    feedback.innerHTML = `<div class="hint">Aguardando leitura…</div>`;
+  }
+
+  function showFeedback(tipo, iconChar, nome, detalhe) {
+    feedback.className = "feedback " + tipo;
     feedback.innerHTML = `
       <div class="icon">${iconChar}</div>
       <div class="nome">${nome}</div>
@@ -214,49 +699,101 @@
     `;
   }
 
-  function logRow(nome, orgao) {
-    const hora = new Date().toLocaleTimeString('pt-BR');
+  function showDuplicateWarning(codigo, nome, orgao, horarios) {
+    feedback.className = "feedback warn";
+    feedback.innerHTML = `
+      <div class="icon">⚠</div>
+      <div class="nome">${nome}</div>
+      <div class="detalhe">Já fez check-in nesta sala hoje às ${horarios}.</div>
+      <div class="warn-actions">
+        <button class="btn small" id="btnConfirmarDuplicado">Registrar mesmo assim</button>
+        <button class="btn small secondary" id="btnCancelarDuplicado">Cancelar</button>
+      </div>
+    `;
+    document.getElementById("btnConfirmarDuplicado").addEventListener("click", () => {
+      registrarCheckin(codigo, nome, orgao);
+    });
+    document.getElementById("btnCancelarDuplicado").addEventListener("click", resetFeedback);
+  }
+
+  function logRow(nome, orgao, sincronizado) {
+    const hora = new Date().toLocaleTimeString("pt-BR");
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${hora}</td><td>${nome}</td><td>${orgao || "-"}</td>`;
+    tr.innerHTML = `<td>${hora}</td><td>${nome}</td><td>${orgao || "-"}</td><td class="${sincronizado ? "" : "pendente"}">${sincronizado ? "" : "pendente"}</td>`;
     logBody.prepend(tr);
   }
 
-  async function processarLeitura(codigo) {
-    codigo = codigo.trim();
+  function updateCounter() {
+    counter.textContent = `${checkinsSessao} check-in(s) registrados nesta sessão`;
+  }
+
+  function processarLeitura(codigoBruto) {
+    const codigo = (codigoBruto || "").trim();
     if (!codigo) return;
 
-    if (!db) {
-      showFeedback("err", "⚠", "Sem conexão", "Configure o Firebase antes de usar.");
+    const agora = Date.now();
+    const ultima = ultimaLeituraPorCodigo.get(codigo);
+    if (ultima && (agora - ultima) < DEBOUNCE_MS) return;
+    ultimaLeituraPorCodigo.set(codigo, agora);
+
+    const participante = participantesCache.get(codigo);
+    if (!participante) {
+      showFeedback("err", "✕", "Código não encontrado", codigo);
       return;
     }
 
-    try {
-      const doc = await db.collection(PARTICIPANTES_COLLECTION).doc(codigo).get();
+    const nomeExibicao = participante.nome_cracha || participante.nome || codigo;
+    const orgao = participante.orgao || "";
 
-      if (!doc.exists) {
-        showFeedback("err", "✕", "Código não encontrado", codigo);
-        return;
-      }
-
-      const p = doc.data();
-      const nomeExibicao = p.nome_cracha || p.nome || codigo;
-
-      await db.collection(CHECKINS_COLLECTION).add({
-        participante_id: codigo,
-        nome: nomeExibicao,
-        orgao: p.orgao || "",
-        sala: salaAtual,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-
-      showFeedback("ok", "✓", nomeExibicao, p.orgao || "");
-      logRow(nomeExibicao, p.orgao);
-      checkinsHoje++;
-      updateCounter();
-    } catch (e) {
-      console.error(e);
-      showFeedback("err", "⚠", "Erro ao registrar", "Tente novamente.");
+    const jaFezHoje = logHojeCache.get(codigo);
+    if (jaFezHoje && jaFezHoje.length) {
+      const horarios = jaFezHoje
+        .map(d => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }))
+        .join(", ");
+      showDuplicateWarning(codigo, nomeExibicao, orgao, horarios);
+      return;
     }
+
+    registrarCheckin(codigo, nomeExibicao, orgao);
+  }
+
+  async function registrarCheckin(codigo, nome, orgao) {
+    const registro = {
+      participante_id: codigo,
+      nome, orgao,
+      sala: salaAtual.id,
+      sala_nome: salaAtual.nome,
+      timestamp_local: new Date().toISOString(),
+    };
+
+    const arr = logHojeCache.get(codigo) || [];
+    arr.push(new Date());
+    logHojeCache.set(codigo, arr);
+
+    let sincronizado = false;
+    if (navigator.onLine) {
+      try {
+        await db.collection("checkins").doc(eventoId).collection("logs").add({
+          ...registro,
+          timestamp: firebase.firestore.Timestamp.fromDate(new Date(registro.timestamp_local)),
+        });
+        sincronizado = true;
+      } catch (e) {
+        console.warn("Falha ao sincronizar check-in, salvando localmente:", e.message);
+      }
+    }
+
+    if (!sincronizado) {
+      const lista = listarPendentes();
+      lista.push(registro);
+      salvarPendentes(lista);
+      atualizarBadgePendentes();
+    }
+
+    showFeedback("ok", "✓", nome, orgao + (sincronizado ? "" : " · salvo localmente, será sincronizado"));
+    logRow(nome, orgao, sincronizado);
+    checkinsSessao++;
+    updateCounter();
   }
 
   scanInput.addEventListener("keydown", (e) => {
@@ -267,12 +804,51 @@
     }
   });
 
-  // Mantém o foco sempre no campo de leitura, mesmo se o operador clicar fora
-  document.addEventListener("click", () => scanInput.focus());
-  setInterval(() => { if (document.activeElement !== scanInput) scanInput.focus(); }, 2000);
+  document.getElementById("telaCheckin").addEventListener("click", () => scanInput.focus());
+  setInterval(() => {
+    if (document.getElementById("telaCheckin").classList.contains("hidden")) return;
+    if (document.activeElement !== scanInput) scanInput.focus();
+  }, 2000);
 
-  initFirebase();
+  // ---------- câmera ----------
+  let html5QrCode = null;
+  let cameraAtiva = false;
+  const btnCamera = document.getElementById("btnCamera");
+  const cameraBox = document.getElementById("cameraBox");
+
+  btnCamera.addEventListener("click", async () => {
+    if (cameraAtiva) {
+      try { await html5QrCode.stop(); } catch (e) {}
+      cameraAtiva = false;
+      cameraBox.classList.add("hidden");
+      btnCamera.textContent = "📷 Câmera";
+      btnCamera.classList.remove("ativa");
+      scanInput.focus();
+      return;
+    }
+    cameraBox.classList.remove("hidden");
+    btnCamera.textContent = "⏹ Parar câmera";
+    btnCamera.classList.add("ativa");
+    try {
+      html5QrCode = new Html5Qrcode("cameraView");
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => processarLeitura(decodedText),
+        () => {}
+      );
+      cameraAtiva = true;
+    } catch (e) {
+      alert("Não foi possível acessar a câmera: " + e.message);
+      cameraBox.classList.add("hidden");
+      btnCamera.textContent = "📷 Câmera";
+      btnCamera.classList.remove("ativa");
+    }
+  });
+
+  resetFeedback();
   updateCounter();
+  iniciar();
 </script>
 
 </body>

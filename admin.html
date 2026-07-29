@@ -120,11 +120,11 @@
     border-radius: 16px; padding: 28px;
   }
   .modal h2 { margin: 0 0 20px; font-size: 18px; }
+  .sala-row-wrapper { margin-bottom: 10px; }
   .sala-row {
     display: grid;
     grid-template-columns: 1fr 90px 130px 32px;
     gap: 8px;
-    margin-bottom: 8px;
     align-items: center;
   }
   .sala-row input, .sala-row select {
@@ -132,11 +132,43 @@
     border-radius: 6px; color: var(--text); font-size: 13px; width: 100%;
   }
   .remove-sala { background: none; border: none; color: var(--err); font-size: 18px; cursor: pointer; }
+  .sala-login-config {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: 8px;
+    margin-top: 6px;
+    padding-left: 2px;
+  }
+  .sala-login-config input, .sala-login-config select {
+    padding: 8px 10px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px; width: 100%;
+  }
   .add-sala-btn {
     background: none; border: 1px dashed var(--border); color: var(--muted);
     padding: 8px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 13px; margin: 8px 0 20px;
   }
   .modal-actions { display: flex; gap: 10px; }
+
+  .consulta-resultado-item {
+    width: 100%; text-align: left; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 6px; color: var(--text);
+    cursor: pointer; font-size: 13px;
+  }
+  .consulta-resultado-item:hover { border-color: var(--accent); }
+  .consulta-resultado-item small { display: block; color: var(--muted); }
+  .consulta-atual {
+    background: var(--panel2); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 12px 14px; margin: 14px 0 10px;
+  }
+  .consulta-atual .label { font-size: 12px; color: var(--muted); }
+  .consulta-atual .valor { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .consulta-atual .aviso { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .consulta-historico-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .consulta-historico-table th, .consulta-historico-table td {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  }
+  .consulta-historico-table th { color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -166,6 +198,7 @@
       <h1>Eventos</h1>
       <div class="user-info">
         <b id="userNome"></b> — <span id="userPapel"></span>
+        &nbsp;·&nbsp;<a href="#" id="btnConsultaPresenca" class="hidden" style="color: var(--muted);">Consultar presença</a>
         &nbsp;·&nbsp;<a href="#" id="btnVincularGoogle" style="color: var(--muted);">Vincular conta Google</a>
         &nbsp;·&nbsp;<a href="#" id="btnLogout" style="color: var(--muted);">Sair</a>
       </div>
@@ -208,6 +241,27 @@
         <button class="btn" id="btnSalvarEvento">Salvar evento</button>
       </div>
       <div class="error-msg hidden" id="eventoError"></div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: CONSULTAR PRESENÇA (só master) ===================== -->
+  <div class="modal-overlay hidden" id="modalConsultaOverlay">
+    <div class="modal">
+      <h2>Consultar presença</h2>
+      <div class="field">
+        <label>Evento</label>
+        <select id="consultaEventoSelect"><option value="">Selecione um evento…</option></select>
+      </div>
+      <div class="field">
+        <label>Nome ou código do participante</label>
+        <input type="text" id="consultaBusca" placeholder="Digite pelo menos 2 letras…" disabled>
+      </div>
+      <div id="consultaResultados"></div>
+      <div id="consultaHistorico" class="hidden"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btnFecharConsulta">Fechar</button>
+      </div>
+      <div class="error-msg hidden" id="consultaError"></div>
     </div>
   </div>
 
@@ -304,6 +358,7 @@
     document.getElementById("dashboard").classList.remove("hidden");
     document.getElementById("userNome").textContent = dados.nome || user.email;
     document.getElementById("userPapel").textContent = dados.papel === "master" ? "Master" : "Admin";
+    document.getElementById("btnConsultaPresenca").classList.toggle("hidden", dados.papel !== "master");
 
     carregarEventos();
   });
@@ -334,7 +389,9 @@
       const div = document.createElement("div");
       div.className = "event-card";
       const salasHtml = (ev.salas || []).map(s =>
-        `<span class="sala-tag">${s.nome} · ${s.qtd_leitores} leitor(es) · ${modoLabel(s.modo_estacao)}</span>`
+        `<span class="sala-tag">${s.nome} · ${s.qtd_leitores} leitor(es) · ${modoLabel(s.modo_estacao)}
+          <a href="#" class="copiar-link-sala" data-evento="${ev.id}" data-sala="${s.id}" title="Copiar link de check-in desta sala" style="margin-left:6px; color: var(--accent);">🔗</a>
+        </span>`
       ).join("");
       div.innerHTML = `
         <div class="card-actions">
@@ -347,8 +404,23 @@
       `;
       div.querySelector(".editar-evento").addEventListener("click", () => abrirModalEdicao(ev));
       div.querySelector(".excluir-evento").addEventListener("click", () => excluirEvento(ev.id, ev.nome));
+      div.querySelectorAll(".copiar-link-sala").forEach(a => {
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          copiarLinkSala(a.dataset.evento, a.dataset.sala);
+        });
+      });
       listEl.appendChild(div);
     });
+  }
+
+  function copiarLinkSala(eventoId, salaId) {
+    const url = new URL("checkin.html", location.href);
+    url.searchParams.set("evento", eventoId);
+    url.searchParams.set("sala", salaId);
+    navigator.clipboard.writeText(url.toString())
+      .then(() => alert("Link copiado:\n" + url.toString()))
+      .catch(() => prompt("Copie o link abaixo:", url.toString()));
   }
 
   async function excluirEvento(id, nome) {
@@ -404,21 +476,47 @@
 
   function adicionarLinhaSala(sala) {
     sala = sala || {};
-    const row = document.createElement("div");
-    row.className = "sala-row";
-    row.innerHTML = `
-      <input type="text" placeholder="Nome da sala" class="sala-nome" value="${sala.nome || ""}">
-      <input type="number" min="1" value="${sala.qtd_leitores || 1}" class="sala-qtd">
-      <select class="sala-modo">
-        <option value="dropdown">Seleção manual</option>
-        <option value="link">Link direto</option>
-        <option value="login">Login por estação</option>
-      </select>
-      <button type="button" class="remove-sala">✕</button>
+    const wrapper = document.createElement("div");
+    wrapper.className = "sala-row-wrapper";
+    wrapper.innerHTML = `
+      <div class="sala-row">
+        <input type="text" placeholder="Nome da sala" class="sala-nome" value="${sala.nome || ""}">
+        <input type="number" min="1" value="${sala.qtd_leitores || 1}" class="sala-qtd">
+        <select class="sala-modo">
+          <option value="dropdown">Seleção manual</option>
+          <option value="link">Link direto</option>
+          <option value="login">Login por estação</option>
+        </select>
+        <button type="button" class="remove-sala">✕</button>
+      </div>
+      <div class="sala-login-config hidden">
+        <select class="sala-login-metodo">
+          <option value="pin">PIN da sala</option>
+          <option value="conta">Conta do painel (e-mail/senha ou Google)</option>
+        </select>
+        <input type="text" placeholder="PIN (4-6 dígitos)" maxlength="6" class="sala-pin">
+      </div>
     `;
-    if (sala.modo_estacao) row.querySelector(".sala-modo").value = sala.modo_estacao;
-    row.querySelector(".remove-sala").addEventListener("click", () => row.remove());
-    salasContainer.appendChild(row);
+    if (sala.id) wrapper.dataset.salaId = sala.id;
+    if (sala.modo_estacao) wrapper.querySelector(".sala-modo").value = sala.modo_estacao;
+    if (sala.login_metodo) wrapper.querySelector(".sala-login-metodo").value = sala.login_metodo;
+    if (sala.pin) wrapper.querySelector(".sala-pin").value = sala.pin;
+
+    const modoSelect = wrapper.querySelector(".sala-modo");
+    const loginConfig = wrapper.querySelector(".sala-login-config");
+    const metodoSelect = wrapper.querySelector(".sala-login-metodo");
+    const pinInput = wrapper.querySelector(".sala-pin");
+
+    function atualizarVisibilidadeLogin() {
+      loginConfig.classList.toggle("hidden", modoSelect.value !== "login");
+      pinInput.classList.toggle("hidden", metodoSelect.value !== "pin");
+    }
+    modoSelect.addEventListener("change", atualizarVisibilidadeLogin);
+    metodoSelect.addEventListener("change", atualizarVisibilidadeLogin);
+    atualizarVisibilidadeLogin();
+
+    wrapper.querySelector(".remove-sala").addEventListener("click", () => wrapper.remove());
+    salasContainer.appendChild(wrapper);
   }
 
   document.getElementById("btnSalvarEvento").addEventListener("click", async () => {
@@ -433,12 +531,23 @@
       return;
     }
 
-    const salas = [...salasContainer.querySelectorAll(".sala-row")].map((row, i) => ({
-      id: "sala-" + (i + 1),
-      nome: row.querySelector(".sala-nome").value.trim() || `Sala ${i + 1}`,
-      qtd_leitores: parseInt(row.querySelector(".sala-qtd").value) || 1,
-      modo_estacao: row.querySelector(".sala-modo").value,
-    }));
+    const salas = [...salasContainer.querySelectorAll(".sala-row-wrapper")].map((wrapper, i) => {
+      const modo = wrapper.querySelector(".sala-modo").value;
+      const sala = {
+        id: wrapper.dataset.salaId || ("sala-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+        nome: wrapper.querySelector(".sala-nome").value.trim() || `Sala ${i + 1}`,
+        qtd_leitores: parseInt(wrapper.querySelector(".sala-qtd").value) || 1,
+        modo_estacao: modo,
+      };
+      if (modo === "login") {
+        const metodo = wrapper.querySelector(".sala-login-metodo").value;
+        sala.login_metodo = metodo;
+        if (metodo === "pin") {
+          sala.pin = wrapper.querySelector(".sala-pin").value.trim();
+        }
+      }
+      return sala;
+    });
 
     const idEditando = document.getElementById("eventoIdEditando").value;
 
@@ -460,6 +569,143 @@
       errEl.classList.remove("hidden");
     }
   });
+
+  // ---------- CONSULTAR PRESENÇA (só master) ----------
+  // Obs: a restrição a "só master" aqui é feita na interface, do mesmo jeito
+  // que o resto do painel já filtra o que aparece por papel — as regras do
+  // Firestore continuam permitindo leitura a qualquer usuário autenticado,
+  // então não é uma barreira de segurança, é só o app escondendo a opção.
+  const modalConsultaOverlay = document.getElementById("modalConsultaOverlay");
+  const consultaEventoSelect = document.getElementById("consultaEventoSelect");
+  const consultaBusca = document.getElementById("consultaBusca");
+  const consultaResultados = document.getElementById("consultaResultados");
+  const consultaHistorico = document.getElementById("consultaHistorico");
+
+  let consultaParticipantesCache = new Map();
+  let consultaSalasPorId = new Map();
+
+  document.getElementById("btnConsultaPresenca").addEventListener("click", async (e) => {
+    e.preventDefault();
+    document.getElementById("consultaError").classList.add("hidden");
+    consultaBusca.value = "";
+    consultaBusca.disabled = true;
+    consultaResultados.innerHTML = "";
+    consultaHistorico.classList.add("hidden");
+    consultaParticipantesCache = new Map();
+
+    consultaEventoSelect.innerHTML = "<option value=''>Carregando eventos…</option>";
+    modalConsultaOverlay.classList.remove("hidden");
+
+    const snap = await db.collection("eventos").orderBy("data", "desc").get();
+    consultaEventoSelect.innerHTML = "<option value=''>Selecione um evento…</option>";
+    snap.forEach(d => {
+      const ev = d.data();
+      const opt = document.createElement("option");
+      opt.value = d.id;
+      opt.textContent = ev.nome;
+      opt.dataset.salas = JSON.stringify(ev.salas || []);
+      consultaEventoSelect.appendChild(opt);
+    });
+  });
+
+  document.getElementById("btnFecharConsulta").addEventListener("click", () => {
+    modalConsultaOverlay.classList.add("hidden");
+  });
+
+  consultaEventoSelect.addEventListener("change", async () => {
+    const eventoId = consultaEventoSelect.value;
+    consultaResultados.innerHTML = "";
+    consultaHistorico.classList.add("hidden");
+    consultaBusca.value = "";
+    if (!eventoId) {
+      consultaBusca.disabled = true;
+      return;
+    }
+
+    const opt = consultaEventoSelect.selectedOptions[0];
+    consultaSalasPorId = new Map((JSON.parse(opt.dataset.salas || "[]")).map(s => [s.id, s.nome]));
+
+    consultaBusca.disabled = true;
+    consultaBusca.placeholder = "Carregando participantes…";
+    try {
+      const snap = await db.collection("participantes").doc(eventoId).collection("lista").get();
+      consultaParticipantesCache = new Map();
+      snap.forEach(d => consultaParticipantesCache.set(d.id, d.data()));
+      consultaBusca.placeholder = `Digite pelo menos 2 letras… (${consultaParticipantesCache.size} participantes)`;
+      consultaBusca.disabled = false;
+    } catch (e) {
+      document.getElementById("consultaError").textContent = "Erro ao carregar participantes: " + e.message;
+      document.getElementById("consultaError").classList.remove("hidden");
+    }
+  });
+
+  consultaBusca.addEventListener("input", () => {
+    const termo = consultaBusca.value.trim().toLowerCase();
+    consultaHistorico.classList.add("hidden");
+    if (termo.length < 2) {
+      consultaResultados.innerHTML = "";
+      return;
+    }
+    const encontrados = [];
+    consultaParticipantesCache.forEach((p, codigo) => {
+      const alvo = `${p.nome || ""} ${p.nome_cracha || ""} ${codigo}`.toLowerCase();
+      if (alvo.includes(termo)) encontrados.push({ codigo, ...p });
+    });
+    consultaResultados.innerHTML = "";
+    if (!encontrados.length) {
+      consultaResultados.innerHTML = "<div class='empty-state'>Nenhum participante encontrado.</div>";
+      return;
+    }
+    encontrados.slice(0, 20).forEach(p => {
+      const div = document.createElement("div");
+      div.className = "consulta-resultado-item";
+      div.innerHTML = `${p.nome_cracha || p.nome || p.codigo}<small>${p.codigo}${p.orgao ? " · " + p.orgao : ""}</small>`;
+      div.addEventListener("click", () => mostrarHistoricoParticipante(p));
+      consultaResultados.appendChild(div);
+    });
+  });
+
+  async function mostrarHistoricoParticipante(participante) {
+    const eventoId = consultaEventoSelect.value;
+    consultaHistorico.classList.remove("hidden");
+    consultaHistorico.innerHTML = "<div class='empty-state'>Carregando histórico…</div>";
+    try {
+      const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+        .where("participante_id", "==", participante.codigo)
+        .get();
+      const registros = snap.docs.map(d => {
+        const data = d.data();
+        const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+        return { ts, sala: consultaSalasPorId.get(data.sala) || data.sala_nome || data.sala };
+      }).sort((a, b) => b.ts - a.ts);
+
+      if (!registros.length) {
+        consultaHistorico.innerHTML = "<div class='empty-state'>Nenhum check-in registrado pra este participante neste evento.</div>";
+        return;
+      }
+
+      const ultimo = registros[0];
+      const linhas = registros.map(r => `<tr><td>${formatarDataHora(r.ts)}</td><td>${r.sala}</td></tr>`).join("");
+
+      consultaHistorico.innerHTML = `
+        <div class="consulta-atual">
+          <div class="label">Última leitura registrada</div>
+          <div class="valor">${ultimo.sala} · ${formatarDataHora(ultimo.ts)}</div>
+          <div class="aviso">Baseado no último check-in — não é rastreamento em tempo real, só indica por onde a pessoa passou por último.</div>
+        </div>
+        <table class="consulta-historico-table">
+          <thead><tr><th>Data/hora</th><th>Sala</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      `;
+    } catch (e) {
+      consultaHistorico.innerHTML = `<div class='empty-state'>Erro ao carregar histórico: ${e.message}</div>`;
+    }
+  }
+
+  function formatarDataHora(d) {
+    return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
 </script>
 
 </body>
