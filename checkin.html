@@ -167,12 +167,43 @@
   #cameraBox {
     width: 100%;
     max-width: 720px;
+    max-height: 220px;
     margin-bottom: 16px;
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid var(--border);
   }
-  #cameraView { width: 100%; }
+  #cameraView { width: 100%; height: 100%; }
+  #cameraView video, #cameraView img, #cameraView canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .camera-aviso {
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    font-size: 14px;
+  }
+
+  #flashOverlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  #flashOverlay.show { opacity: 0.5; }
+  #flashOverlay.ok { background: var(--ok); }
+  #flashOverlay.err { background: var(--err); }
+  #flashOverlay.warn { background: var(--warn); }
 
   .feedback {
     width: 100%;
@@ -198,7 +229,6 @@
   .feedback .detalhe { font-size: 16px; color: var(--muted); margin: 0; }
   .feedback.ok .detalhe, .feedback.err .detalhe, .feedback.warn .detalhe { color: inherit; opacity: 0.85; }
   .feedback .hint { font-size: 15px; color: var(--muted); }
-  .warn-actions { display: flex; gap: 10px; margin-top: 18px; }
 
   .counter { margin-top: 10px; font-size: 13px; color: var(--muted); }
 
@@ -216,6 +246,8 @@
 </style>
 </head>
 <body>
+
+  <div id="flashOverlay"></div>
 
   <!-- ===================== CARREGANDO ===================== -->
   <div id="telaCarregando" class="center-screen">
@@ -287,6 +319,8 @@
       <input type="text" id="scanInput" class="scan-input" placeholder="Aponte o leitor aqui e escaneie o QR do crachá…" autofocus autocomplete="off">
       <button type="button" class="btn-camera" id="btnCamera">📷 Câmera</button>
     </div>
+
+    <div id="cameraAvisoPermissao" class="camera-aviso hidden"></div>
 
     <div id="cameraBox" class="hidden">
       <div id="cameraView"></div>
@@ -707,6 +741,30 @@
     feedback.innerHTML = `<div class="hint">Aguardando leitura…</div>`;
   }
 
+  // ---------- flash de tela + som (pra notar o resultado mesmo com a câmera
+  // ocupando boa parte da tela no celular) ----------
+  const flashOverlay = document.getElementById("flashOverlay");
+  let audioCtx = null;
+
+  function flashTela(tipo) {
+    flashOverlay.className = "show " + tipo;
+    setTimeout(() => { flashOverlay.className = ""; }, 700);
+  }
+
+  function tocarBeep(tipo) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.value = tipo === "err" ? 220 : (tipo === "warn" ? 440 : 880);
+      gain.gain.value = 0.2;
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    } catch (e) { /* sem áudio disponível, segue só com o flash visual */ }
+  }
+
   function showFeedback(tipo, iconChar, nome, detalhe) {
     feedback.className = "feedback " + tipo;
     feedback.innerHTML = `
@@ -714,23 +772,15 @@
       <div class="nome">${escapeHtml(nome)}</div>
       <div class="detalhe">${escapeHtml(detalhe)}</div>
     `;
+    flashTela(tipo);
+    tocarBeep(tipo);
   }
 
+  // Ponto de entrada da sala: quem chega já foi credenciado no balcão/totem,
+  // então um crachá repetido não tem "registrar mesmo assim" — só bloqueia e
+  // avisa (decisão do usuário, pra simplificar o fluxo de leitura em fila).
   function showDuplicateWarning(codigo, nome, orgao, horarios) {
-    feedback.className = "feedback warn";
-    feedback.innerHTML = `
-      <div class="icon">⚠</div>
-      <div class="nome">${escapeHtml(nome)}</div>
-      <div class="detalhe">Já fez check-in nesta sala hoje às ${escapeHtml(horarios)}.</div>
-      <div class="warn-actions">
-        <button class="btn small" id="btnConfirmarDuplicado">Registrar mesmo assim</button>
-        <button class="btn small secondary" id="btnCancelarDuplicado">Cancelar</button>
-      </div>
-    `;
-    document.getElementById("btnConfirmarDuplicado").addEventListener("click", () => {
-      registrarCheckin(codigo, nome, orgao, "entrada");
-    });
-    document.getElementById("btnCancelarDuplicado").addEventListener("click", resetFeedback);
+    showFeedback("err", "✕", nome, `Já fez check-in nesta sala hoje às ${horarios}.`);
   }
 
   function logRow(nome, orgao, sincronizado, tipo) {
@@ -822,7 +872,9 @@
     }
 
     const prefixoTipo = eventoAtual.controle_entrada_saida ? (tipo === "saida" ? "Saída · " : "Entrada · ") : "";
-    showFeedback("ok", "✓", nome, prefixoTipo + orgao + (sincronizado ? "" : " · salvo localmente, será sincronizado"));
+    const classeFeedback = tipo === "saida" ? "warn" : "ok";
+    const iconeFeedback = tipo === "saida" ? "↩" : "✓";
+    showFeedback(classeFeedback, iconeFeedback, nome, prefixoTipo + orgao + (sincronizado ? "" : " · salvo localmente, será sincronizado"));
     logRow(nome, orgao, sincronizado, tipo);
     checkinsSessao++;
     updateCounter();
@@ -847,6 +899,7 @@
   let cameraAtiva = false;
   const btnCamera = document.getElementById("btnCamera");
   const cameraBox = document.getElementById("cameraBox");
+  const cameraAvisoPermissao = document.getElementById("cameraAvisoPermissao");
 
   btnCamera.addEventListener("click", async () => {
     if (cameraAtiva) {
@@ -858,6 +911,7 @@
       scanInput.focus();
       return;
     }
+    cameraAvisoPermissao.classList.add("hidden");
     cameraBox.classList.remove("hidden");
     btnCamera.textContent = "⏹ Parar câmera";
     btnCamera.classList.add("ativa");
@@ -871,7 +925,8 @@
       );
       cameraAtiva = true;
     } catch (e) {
-      alert("Não foi possível acessar a câmera: " + e.message);
+      cameraAvisoPermissao.textContent = "Não foi possível acessar a câmera. Verifique se a permissão de câmera está habilitada pra este site nas configurações do navegador, e tente de novo.";
+      cameraAvisoPermissao.classList.remove("hidden");
       cameraBox.classList.add("hidden");
       btnCamera.textContent = "📷 Câmera";
       btnCamera.classList.remove("ativa");
