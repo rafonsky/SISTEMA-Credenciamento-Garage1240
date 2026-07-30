@@ -272,6 +272,7 @@
         <div class="muted" id="userPapel"></div>
       </div>
       <a href="#" id="btnConsultaPresenca" class="sidebar-link hidden">Consultar presença</a>
+      <a href="#" id="btnApuracaoPresenca" class="sidebar-link">Apuração de presença</a>
       <a href="#" id="btnGerenciarUsuarios" class="sidebar-link hidden">Gerenciar usuários</a>
       <div class="sidebar-divider"></div>
       <a href="#" id="btnVincularGoogle" class="sidebar-link">Vincular conta Google</a>
@@ -308,6 +309,10 @@
         <label>Salas</label>
         <div id="salasContainer"></div>
         <button type="button" class="add-sala-btn" id="btnAddSala">+ adicionar sala</button>
+      </div>
+
+      <div class="field">
+        <label class="checkbox-row"><input type="checkbox" id="eventoControleEntradaSaida"> Controlar entrada e saída (cada leitura no check-in alterna sozinha entre entrada e saída, pra apurar tempo de presença por sala)</label>
       </div>
 
       <div class="field">
@@ -395,17 +400,59 @@
         <label>Evento</label>
         <select id="consultaEventoSelect"><option value="">Selecione um evento…</option></select>
       </div>
+      <div class="field" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:130px;">
+          <label>Sala</label>
+          <select id="consultaFiltroSala"><option value="">Todas as salas</option></select>
+        </div>
+        <div style="flex:1; min-width:130px;">
+          <label>Dia</label>
+          <input type="date" id="consultaFiltroDia">
+        </div>
+        <div style="flex:1; min-width:130px;">
+          <label>Check-in</label>
+          <select id="consultaFiltroStatus">
+            <option value="todos">Todos</option>
+            <option value="presente">Só quem fez check-in</option>
+            <option value="ausente">Só quem não fez check-in</option>
+          </select>
+        </div>
+      </div>
       <div class="field">
         <label>Nome ou código do participante</label>
         <input type="text" id="consultaBusca" placeholder="Selecione um evento pra ver a lista…" disabled>
       </div>
-      <button type="button" class="btn secondary" id="btnExportarListaAssinatura" disabled style="margin-bottom:14px;">Exportar lista pra assinatura (PDF)</button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+        <button type="button" class="btn secondary" id="btnExportarListaAssinatura" disabled>Exportar lista pra assinatura (PDF)</button>
+        <button type="button" class="btn secondary" id="btnExportarListaFiltrada" disabled>Exportar lista filtrada (PDF)</button>
+      </div>
       <div id="consultaResultados"></div>
       <div id="consultaHistorico" class="hidden"></div>
       <div class="modal-actions">
         <button class="btn secondary" id="btnFecharConsulta">Fechar</button>
       </div>
       <div class="error-msg hidden" id="consultaError"></div>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: APURAÇÃO DE PRESENÇA ===================== -->
+  <div class="modal-overlay hidden" id="modalApuracaoOverlay">
+    <div class="modal wide">
+      <h2>Apuração de presença</h2>
+      <div class="field">
+        <label>Evento</label>
+        <select id="apuracaoEventoSelect"><option value="">Selecione um evento…</option></select>
+      </div>
+      <div class="field">
+        <label>Sala</label>
+        <select id="apuracaoSalaSelect" disabled><option value="">Selecione uma sala…</option></select>
+      </div>
+      <button type="button" class="btn secondary hidden" id="btnEncerrarSaidaTodos" style="margin-bottom:14px;">Encerrar saída de todos (fechar pendências)</button>
+      <div id="apuracaoResultados"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btnFecharApuracao">Fechar</button>
+      </div>
+      <div class="error-msg hidden" id="apuracaoError"></div>
     </div>
   </div>
 
@@ -775,6 +822,7 @@
     document.getElementById("eventoNome").value = "";
     document.getElementById("eventoData").value = "";
     document.getElementById("eventoLocal").value = "";
+    document.getElementById("eventoControleEntradaSaida").checked = false;
     salasContainer.innerHTML = "";
     document.getElementById("eventoError").classList.add("hidden");
     adicionarLinhaSala();
@@ -789,6 +837,7 @@
     document.getElementById("eventoNome").value = ev.nome || "";
     document.getElementById("eventoData").value = ev.data || "";
     document.getElementById("eventoLocal").value = ev.local || "";
+    document.getElementById("eventoControleEntradaSaida").checked = !!ev.controle_entrada_saida;
     salasContainer.innerHTML = "";
     document.getElementById("eventoError").classList.add("hidden");
     (ev.salas && ev.salas.length ? ev.salas : [{}]).forEach(s => adicionarLinhaSala(s));
@@ -974,6 +1023,7 @@
     const nome = document.getElementById("eventoNome").value.trim();
     const data = document.getElementById("eventoData").value;
     const local = document.getElementById("eventoLocal").value.trim();
+    const controle_entrada_saida = document.getElementById("eventoControleEntradaSaida").checked;
     const errEl = document.getElementById("eventoError");
 
     if (!nome || !data) {
@@ -1062,7 +1112,7 @@
       let eventoId = idEditando;
       if (!eventoId) {
         const ref = await db.collection("eventos").add({
-          nome, data, local, salas, branding, inscricao,
+          nome, data, local, salas, branding, inscricao, controle_entrada_saida,
           criado_em: firebase.firestore.FieldValue.serverTimestamp(),
           criado_por: usuarioAtual.uid,
         });
@@ -1080,7 +1130,7 @@
         }
       }
 
-      await db.collection("eventos").doc(eventoId).set({ nome, data, local, salas, branding, inscricao }, { merge: true });
+      await db.collection("eventos").doc(eventoId).set({ nome, data, local, salas, branding, inscricao, controle_entrada_saida }, { merge: true });
 
       modalOverlay.classList.add("hidden");
       carregarEventos();
@@ -1100,9 +1150,51 @@
   const consultaBusca = document.getElementById("consultaBusca");
   const consultaResultados = document.getElementById("consultaResultados");
   const consultaHistorico = document.getElementById("consultaHistorico");
+  const consultaFiltroSala = document.getElementById("consultaFiltroSala");
+  const consultaFiltroDia = document.getElementById("consultaFiltroDia");
+  const consultaFiltroStatus = document.getElementById("consultaFiltroStatus");
 
   let consultaParticipantesCache = new Map();
   let consultaSalasPorId = new Map();
+  let consultaLogsPorParticipante = new Map(); // codigo -> [{ts, sala}]
+
+  function dataYMD(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  // Ponto único de "quem está presente agora, com estes filtros" — reaproveitado
+  // pela lista/exportação de hoje e pensado pra ser a mesma função que um
+  // futuro sorteio (já cogitado, ainda não construído) usaria como fonte dos
+  // participantes elegíveis, sem precisar duplicar essa lógica de filtro.
+  function participanteEstaPresente(codigo) {
+    const logs = consultaLogsPorParticipante.get(codigo);
+    if (!logs || !logs.length) return false;
+    const salaFiltro = consultaFiltroSala.value;
+    const diaFiltro = consultaFiltroDia.value;
+    return logs.some(l => {
+      if (salaFiltro && l.sala !== salaFiltro) return false;
+      if (diaFiltro && dataYMD(l.ts) !== diaFiltro) return false;
+      return true;
+    });
+  }
+
+  function listaFiltradaAtual() {
+    const status = consultaFiltroStatus.value;
+    return listaCompletaOrdenada().filter(p => {
+      if (status === "todos") return true;
+      const presente = participanteEstaPresente(p.codigo);
+      return status === "presente" ? presente : !presente;
+    });
+  }
+
+  function listaExibidaComBusca() {
+    const termo = consultaBusca.value.trim().toLowerCase();
+    let lista = listaFiltradaAtual();
+    if (termo) {
+      lista = lista.filter(p => `${p.nome || ""} ${p.nome_cracha || ""} ${p.codigo}`.toLowerCase().includes(termo));
+    }
+    return lista;
+  }
 
   document.getElementById("btnConsultaPresenca").addEventListener("click", async (e) => {
     e.preventDefault();
@@ -1133,6 +1225,7 @@
   });
 
   const btnExportarListaAssinatura = document.getElementById("btnExportarListaAssinatura");
+  const btnExportarListaFiltrada = document.getElementById("btnExportarListaFiltrada");
 
   consultaEventoSelect.addEventListener("change", async () => {
     const eventoId = consultaEventoSelect.value;
@@ -1140,33 +1233,64 @@
     consultaHistorico.classList.add("hidden");
     consultaBusca.value = "";
     btnExportarListaAssinatura.disabled = true;
+    btnExportarListaFiltrada.disabled = true;
+    consultaFiltroSala.innerHTML = "<option value=''>Todas as salas</option>";
+    consultaFiltroDia.value = "";
+    consultaFiltroStatus.value = "todos";
     if (!eventoId) {
       consultaBusca.disabled = true;
       return;
     }
 
     const opt = consultaEventoSelect.selectedOptions[0];
-    consultaSalasPorId = new Map((JSON.parse(opt.dataset.salas || "[]")).map(s => [s.id, s.nome]));
+    const salas = JSON.parse(opt.dataset.salas || "[]");
+    consultaSalasPorId = new Map(salas.map(s => [s.id, s.nome]));
+    salas.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = s.nome;
+      consultaFiltroSala.appendChild(o);
+    });
+    consultaFiltroDia.value = dataYMD(new Date());
 
     consultaBusca.disabled = true;
     consultaBusca.placeholder = "Carregando participantes…";
     try {
-      const snap = await db.collection("participantes").doc(eventoId).collection("lista").get();
+      const [participantesSnap, logsSnap] = await Promise.all([
+        db.collection("participantes").doc(eventoId).collection("lista").get(),
+        db.collection("checkins").doc(eventoId).collection("logs").get(),
+      ]);
       consultaParticipantesCache = new Map();
-      snap.forEach(d => consultaParticipantesCache.set(d.id, d.data()));
+      participantesSnap.forEach(d => consultaParticipantesCache.set(d.id, d.data()));
+      consultaLogsPorParticipante = new Map();
+      logsSnap.forEach(d => {
+        const data = d.data();
+        const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+        const arr = consultaLogsPorParticipante.get(data.participante_id) || [];
+        arr.push({ ts, sala: data.sala });
+        consultaLogsPorParticipante.set(data.participante_id, arr);
+      });
       consultaBusca.placeholder = `Buscar por nome ou código… (${consultaParticipantesCache.size} participantes — em branco mostra todos)`;
       consultaBusca.disabled = false;
       btnExportarListaAssinatura.disabled = consultaParticipantesCache.size === 0;
-      renderizarResultadosConsulta(listaCompletaOrdenada(), 50);
+      btnExportarListaFiltrada.disabled = consultaParticipantesCache.size === 0;
+      renderizarResultadosConsulta(listaExibidaComBusca(), 50);
     } catch (e) {
       document.getElementById("consultaError").textContent = "Erro ao carregar participantes: " + e.message;
       document.getElementById("consultaError").classList.remove("hidden");
     }
   });
 
+  [consultaFiltroSala, consultaFiltroDia, consultaFiltroStatus].forEach(el => {
+    el.addEventListener("change", () => {
+      consultaHistorico.classList.add("hidden");
+      renderizarResultadosConsulta(listaExibidaComBusca(), 50);
+    });
+  });
+
   btnExportarListaAssinatura.addEventListener("click", () => {
     const eventoNome = consultaEventoSelect.selectedOptions[0]?.textContent || "Evento";
-    const lista = listaCompletaOrdenada();
+    const lista = listaFiltradaAtual();
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF();
     const margemEsquerda = 15;
@@ -1203,6 +1327,40 @@
     pdf.save(`lista-presenca-${eventoNome.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
   });
 
+  btnExportarListaFiltrada.addEventListener("click", () => {
+    const eventoNome = consultaEventoSelect.selectedOptions[0]?.textContent || "Evento";
+    const lista = listaFiltradaAtual();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    const margemEsquerda = 15;
+    const alturaPagina = 285;
+    let y = 20;
+    let numero = 1;
+
+    function cabecalho() {
+      pdf.setFontSize(14);
+      pdf.text(eventoNome, margemEsquerda, y);
+      pdf.setFontSize(10);
+      pdf.text("Lista filtrada (" + lista.length + " participante(s))", margemEsquerda, y + 6);
+      y += 18;
+      pdf.setFontSize(11);
+    }
+
+    cabecalho();
+    lista.forEach(p => {
+      if (y > alturaPagina) {
+        pdf.addPage();
+        y = 20;
+        cabecalho();
+      }
+      pdf.text(`${numero}. ${p.nome_cracha || p.nome || p.codigo}`, margemEsquerda, y);
+      numero++;
+      y += 8;
+    });
+
+    pdf.save(`lista-filtrada-${eventoNome.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
+  });
+
   function listaCompletaOrdenada() {
     const todos = [];
     consultaParticipantesCache.forEach((p, codigo) => todos.push({ codigo, ...p }));
@@ -1232,18 +1390,8 @@
   }
 
   consultaBusca.addEventListener("input", () => {
-    const termo = consultaBusca.value.trim().toLowerCase();
     consultaHistorico.classList.add("hidden");
-    if (!termo) {
-      renderizarResultadosConsulta(listaCompletaOrdenada(), 50);
-      return;
-    }
-    const encontrados = [];
-    consultaParticipantesCache.forEach((p, codigo) => {
-      const alvo = `${p.nome || ""} ${p.nome_cracha || ""} ${codigo}`.toLowerCase();
-      if (alvo.includes(termo)) encontrados.push({ codigo, ...p });
-    });
-    renderizarResultadosConsulta(encontrados, 50);
+    renderizarResultadosConsulta(listaExibidaComBusca(), 50);
   });
 
   async function mostrarHistoricoParticipante(participante) {
@@ -1369,6 +1517,210 @@
   function formatarDataHora(d) {
     return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
+
+  // ---------- APURAÇÃO DE PRESENÇA (master e admin dos eventos permitidos) ----------
+  // Se o evento tem controle_entrada_saida ligado, cada leitura no checkin.html
+  // alterna sozinha entre entrada e saída (ver checkin.html); aqui a gente
+  // pareia entrada->saída em ordem cronológica pra somar o tempo de presença
+  // por sala. Se estiver desligado, mostra só os horários de entrada, igual
+  // ao "Consultar presença".
+  const modalApuracaoOverlay = document.getElementById("modalApuracaoOverlay");
+  const apuracaoEventoSelect = document.getElementById("apuracaoEventoSelect");
+  const apuracaoSalaSelect = document.getElementById("apuracaoSalaSelect");
+  const apuracaoResultados = document.getElementById("apuracaoResultados");
+  const btnEncerrarSaidaTodos = document.getElementById("btnEncerrarSaidaTodos");
+
+  let apuracaoEventoAtual = null;
+
+  document.getElementById("btnApuracaoPresenca").addEventListener("click", async (e) => {
+    e.preventDefault();
+    document.getElementById("apuracaoError").classList.add("hidden");
+    apuracaoResultados.innerHTML = "";
+    btnEncerrarSaidaTodos.classList.add("hidden");
+    apuracaoSalaSelect.innerHTML = "<option value=''>Selecione uma sala…</option>";
+    apuracaoSalaSelect.disabled = true;
+    apuracaoEventoAtual = null;
+
+    apuracaoEventoSelect.innerHTML = "<option value=''>Carregando eventos…</option>";
+    modalApuracaoOverlay.classList.remove("hidden");
+
+    try {
+      const snap = await db.collection("eventos").orderBy("data", "desc").get();
+      let eventos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (usuarioAtual.papel !== "master") {
+        const permitidos = usuarioAtual.eventos_permitidos || [];
+        eventos = eventos.filter(ev => permitidos.includes(ev.id));
+      }
+
+      apuracaoEventoSelect.innerHTML = "<option value=''>Selecione um evento…</option>";
+      eventos.forEach(ev => {
+        const opt = document.createElement("option");
+        opt.value = ev.id;
+        opt.textContent = ev.nome;
+        opt.dataset.evento = JSON.stringify(ev);
+        apuracaoEventoSelect.appendChild(opt);
+      });
+    } catch (e2) {
+      document.getElementById("apuracaoError").textContent = "Erro ao carregar eventos: " + e2.message;
+      document.getElementById("apuracaoError").classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("btnFecharApuracao").addEventListener("click", () => {
+    modalApuracaoOverlay.classList.add("hidden");
+  });
+
+  apuracaoEventoSelect.addEventListener("change", () => {
+    apuracaoResultados.innerHTML = "";
+    btnEncerrarSaidaTodos.classList.add("hidden");
+    const opt = apuracaoEventoSelect.selectedOptions[0];
+    if (!opt || !opt.value) {
+      apuracaoSalaSelect.innerHTML = "<option value=''>Selecione uma sala…</option>";
+      apuracaoSalaSelect.disabled = true;
+      apuracaoEventoAtual = null;
+      return;
+    }
+    apuracaoEventoAtual = JSON.parse(opt.dataset.evento);
+    apuracaoSalaSelect.innerHTML = "<option value=''>Selecione uma sala…</option>";
+    (apuracaoEventoAtual.salas || []).forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = s.nome;
+      apuracaoSalaSelect.appendChild(o);
+    });
+    apuracaoSalaSelect.disabled = false;
+  });
+
+  apuracaoSalaSelect.addEventListener("change", carregarApuracaoSala);
+
+  function formatarDuracao(ms) {
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h === 0 ? `${m} min` : `${h}h${String(m).padStart(2, "0")}min`;
+  }
+
+  async function buscarLogsAgrupadosPorParticipante(eventoId, salaId) {
+    const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+      .where("sala", "==", salaId).get();
+    const porParticipante = new Map(); // codigo -> { nome, orgao, logs: [{ts, tipo}] }
+    snap.forEach(d => {
+      const data = d.data();
+      const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+      const item = porParticipante.get(data.participante_id) || { nome: data.nome, orgao: data.orgao, logs: [] };
+      item.logs.push({ ts, tipo: data.tipo || "entrada" });
+      porParticipante.set(data.participante_id, item);
+    });
+    porParticipante.forEach(info => info.logs.sort((a, b) => a.ts - b.ts));
+    return porParticipante;
+  }
+
+  async function carregarApuracaoSala() {
+    const salaId = apuracaoSalaSelect.value;
+    apuracaoResultados.innerHTML = "";
+    btnEncerrarSaidaTodos.classList.add("hidden");
+    if (!salaId || !apuracaoEventoAtual) return;
+
+    apuracaoResultados.innerHTML = "<div class='empty-state'>Carregando…</div>";
+    try {
+      const porParticipante = await buscarLogsAgrupadosPorParticipante(apuracaoEventoAtual.id, salaId);
+      const controleAtivo = !!apuracaoEventoAtual.controle_entrada_saida;
+      const linhas = [];
+      let existeAberto = false;
+
+      porParticipante.forEach((info, codigo) => {
+        if (!controleAtivo) {
+          const horarios = info.logs.map(l => formatarDataHora(l.ts)).join(", ");
+          linhas.push({ nome: info.nome, orgao: info.orgao, detalhe: horarios, status: "" });
+          return;
+        }
+        let totalMs = 0;
+        let aberto = null;
+        info.logs.forEach(l => {
+          if (l.tipo === "entrada") {
+            if (aberto === null) aberto = l.ts;
+          } else if (aberto !== null) {
+            totalMs += l.ts - aberto;
+            aberto = null;
+          }
+        });
+        const emAberto = aberto !== null;
+        if (emAberto) existeAberto = true;
+        linhas.push({
+          nome: info.nome, orgao: info.orgao,
+          detalhe: formatarDuracao(totalMs),
+          status: emAberto ? `Em aberto desde ${formatarDataHora(aberto)}` : "Fechado",
+        });
+      });
+
+      linhas.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
+
+      if (!linhas.length) {
+        apuracaoResultados.innerHTML = "<div class='empty-state'>Nenhum check-in registrado nesta sala.</div>";
+      } else {
+        const cabecalho = controleAtivo
+          ? "<tr><th>Nome</th><th>Órgão</th><th>Tempo total</th><th>Status</th></tr>"
+          : "<tr><th>Nome</th><th>Órgão</th><th>Horários</th></tr>";
+        const corpo = linhas.map(l => controleAtivo
+          ? `<tr><td>${escapeHtml(l.nome)}</td><td>${escapeHtml(l.orgao) || "-"}</td><td>${l.detalhe}</td><td>${l.status}</td></tr>`
+          : `<tr><td>${escapeHtml(l.nome)}</td><td>${escapeHtml(l.orgao) || "-"}</td><td>${l.detalhe}</td></tr>`
+        ).join("");
+        apuracaoResultados.innerHTML = `<table class="consulta-historico-table"><thead>${cabecalho}</thead><tbody>${corpo}</tbody></table>`;
+      }
+
+      btnEncerrarSaidaTodos.classList.toggle("hidden", !(controleAtivo && existeAberto));
+    } catch (e) {
+      apuracaoResultados.innerHTML = `<div class='empty-state'>Erro ao carregar apuração: ${e.message}</div>`;
+    }
+  }
+
+  btnEncerrarSaidaTodos.addEventListener("click", async () => {
+    const salaId = apuracaoSalaSelect.value;
+    const salaNome = apuracaoSalaSelect.selectedOptions[0]?.textContent || "";
+    if (!salaId || !apuracaoEventoAtual) return;
+    const confirmado = confirm(`Registrar saída agora pra todos os participantes com entrada em aberto na sala "${salaNome}"?`);
+    if (!confirmado) return;
+
+    try {
+      const eventoId = apuracaoEventoAtual.id;
+      const porParticipante = await buscarLogsAgrupadosPorParticipante(eventoId, salaId);
+      const agora = new Date();
+      const batch = db.batch();
+      let count = 0;
+
+      porParticipante.forEach((info, codigo) => {
+        let aberto = null;
+        info.logs.forEach(l => {
+          if (l.tipo === "entrada") { if (aberto === null) aberto = l.ts; }
+          else { aberto = null; }
+        });
+        if (aberto !== null) {
+          const ref = db.collection("checkins").doc(eventoId).collection("logs").doc();
+          batch.set(ref, {
+            participante_id: codigo,
+            nome: info.nome,
+            orgao: info.orgao,
+            sala: salaId,
+            sala_nome: salaNome,
+            tipo: "saida",
+            timestamp: firebase.firestore.Timestamp.fromDate(agora),
+            timestamp_local: agora.toISOString(),
+          });
+          count++;
+        }
+      });
+
+      if (count === 0) {
+        alert("Não há entradas em aberto nesta sala.");
+        return;
+      }
+      await batch.commit();
+      alert(`Saída registrada pra ${count} participante(s).`);
+      carregarApuracaoSala();
+    } catch (e) {
+      alert("Erro ao encerrar saídas: " + e.message);
+    }
+  });
 
   // ---------- GERENCIAR USUÁRIOS (só master) ----------
   const modalUsuariosOverlay = document.getElementById("modalUsuariosOverlay");

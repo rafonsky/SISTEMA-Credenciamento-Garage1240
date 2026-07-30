@@ -192,9 +192,14 @@
     messagingSenderId: "146226402909",
     appId: "1:146226402909:web:50f7f5c95a366894439fb4"
   };
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+  // App nomeado (não o "[DEFAULT]"): o Firebase Auth sincroniza o usuário
+  // atual entre abas da mesma origem via um IndexedDB compartilhado por app,
+  // independente da persistence (LOCAL/SESSION) de cada aba — sem isso, o
+  // login anônimo daqui derruba a sessão do Master aberta no admin.html em
+  // outra aba do mesmo domínio (bug real, reproduzido em produção).
+  const inscricaoApp = firebase.initializeApp(firebaseConfig, "inscricao");
+  const auth = inscricaoApp.auth();
+  const db = inscricaoApp.firestore();
 
   // App Check (reCAPTCHA v3) — proteção contra inscrições automatizadas por
   // bot. Só ativa depois que a chave de site real for colada aqui (gerada em

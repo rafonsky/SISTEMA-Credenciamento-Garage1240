@@ -300,7 +300,7 @@
 
     <div class="log">
       <table>
-        <thead><tr><th>Horário</th><th>Nome</th><th>Órgão</th><th></th></tr></thead>
+        <thead><tr><th>Horário</th><th>Nome</th><th>Órgão</th><th>Tipo</th><th></th></tr></thead>
         <tbody id="logBody"></tbody>
       </table>
     </div>
@@ -322,9 +322,14 @@
     messagingSenderId: "146226402909",
     appId: "1:146226402909:web:50f7f5c95a366894439fb4"
   };
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+  // App nomeado (não o "[DEFAULT]"): o Firebase Auth sincroniza o usuário
+  // atual entre abas da mesma origem via um IndexedDB compartilhado por app,
+  // independente da persistence (LOCAL/SESSION) de cada aba — sem isso, o
+  // login (anônimo ou por conta) daqui derruba a sessão do Master aberta no
+  // admin.html em outra aba do mesmo domínio (bug real, reproduzido em produção).
+  const checkinApp = firebase.initializeApp(firebaseConfig, "checkin");
+  const auth = checkinApp.auth();
+  const db = checkinApp.firestore();
 
   const DEBOUNCE_MS = 4000;
 
@@ -337,7 +342,7 @@
   let usuarioConta = null; // { uid, papel, eventos_permitidos } quando modo login/conta
 
   let participantesCache = new Map();
-  let logHojeCache = new Map(); // codigo -> [Date,...]
+  let logHojeCache = new Map(); // codigo -> [{ts, tipo}, ...]
   let ultimaLeituraPorCodigo = new Map();
   let checkinsSessao = 0;
 
@@ -623,15 +628,16 @@
             const data = d.data();
             const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
             const arr = novo.get(data.participante_id) || [];
-            arr.push(ts);
+            arr.push({ ts, tipo: data.tipo || "entrada" });
             novo.set(data.participante_id, arr);
           });
+          novo.forEach(arr => arr.sort((a, b) => a.ts - b.ts));
           // Preserva registros de hoje feitos nesta sessão que ainda não foram
           // sincronizados (descarta os de dias anteriores, caso a estação
           // fique ligada de um dia pro outro).
-          logHojeCache.forEach((datas, codigo) => {
+          logHojeCache.forEach((registros, codigo) => {
             if (novo.has(codigo)) return;
-            const aindaHoje = datas.filter(dt => dt >= inicio);
+            const aindaHoje = registros.filter(r => r.ts >= inicio);
             if (aindaHoje.length) novo.set(codigo, aindaHoje);
           });
           logHojeCache = novo;
@@ -722,15 +728,16 @@
       </div>
     `;
     document.getElementById("btnConfirmarDuplicado").addEventListener("click", () => {
-      registrarCheckin(codigo, nome, orgao);
+      registrarCheckin(codigo, nome, orgao, "entrada");
     });
     document.getElementById("btnCancelarDuplicado").addEventListener("click", resetFeedback);
   }
 
-  function logRow(nome, orgao, sincronizado) {
+  function logRow(nome, orgao, sincronizado, tipo) {
     const hora = new Date().toLocaleTimeString("pt-BR");
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${hora}</td><td>${escapeHtml(nome)}</td><td>${escapeHtml(orgao) || "-"}</td><td class="${sincronizado ? "" : "pendente"}">${sincronizado ? "" : "pendente"}</td>`;
+    const tipoLabel = eventoAtual.controle_entrada_saida ? (tipo === "saida" ? "Saída" : "Entrada") : "";
+    tr.innerHTML = `<td>${hora}</td><td>${escapeHtml(nome)}</td><td>${escapeHtml(orgao) || "-"}</td><td>${tipoLabel}</td><td class="${sincronizado ? "" : "pendente"}">${sincronizado ? "" : "pendente"}</td>`;
     logBody.prepend(tr);
   }
 
@@ -756,29 +763,42 @@
     const nomeExibicao = participante.nome_cracha || participante.nome || codigo;
     const orgao = participante.orgao || "";
 
-    const jaFezHoje = logHojeCache.get(codigo);
-    if (jaFezHoje && jaFezHoje.length) {
-      const horarios = jaFezHoje
-        .map(d => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }))
+    const registrosHoje = logHojeCache.get(codigo);
+
+    if (eventoAtual.controle_entrada_saida) {
+      // Sem toggle manual: cada leitura alterna sozinha entre entrada e
+      // saída, olhando o último registro da pessoa nesta sala hoje.
+      const ultimoTipo = registrosHoje && registrosHoje.length
+        ? registrosHoje[registrosHoje.length - 1].tipo
+        : null;
+      const tipo = ultimoTipo === "entrada" ? "saida" : "entrada";
+      registrarCheckin(codigo, nomeExibicao, orgao, tipo);
+      return;
+    }
+
+    if (registrosHoje && registrosHoje.length) {
+      const horarios = registrosHoje
+        .map(r => r.ts.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }))
         .join(", ");
       showDuplicateWarning(codigo, nomeExibicao, orgao, horarios);
       return;
     }
 
-    registrarCheckin(codigo, nomeExibicao, orgao);
+    registrarCheckin(codigo, nomeExibicao, orgao, "entrada");
   }
 
-  async function registrarCheckin(codigo, nome, orgao) {
+  async function registrarCheckin(codigo, nome, orgao, tipo) {
     const registro = {
       participante_id: codigo,
       nome, orgao,
       sala: salaAtual.id,
       sala_nome: salaAtual.nome,
+      tipo,
       timestamp_local: new Date().toISOString(),
     };
 
     const arr = logHojeCache.get(codigo) || [];
-    arr.push(new Date());
+    arr.push({ ts: new Date(), tipo });
     logHojeCache.set(codigo, arr);
 
     let sincronizado = false;
@@ -801,8 +821,9 @@
       atualizarBadgePendentes();
     }
 
-    showFeedback("ok", "✓", nome, orgao + (sincronizado ? "" : " · salvo localmente, será sincronizado"));
-    logRow(nome, orgao, sincronizado);
+    const prefixoTipo = eventoAtual.controle_entrada_saida ? (tipo === "saida" ? "Saída · " : "Entrada · ") : "";
+    showFeedback("ok", "✓", nome, prefixoTipo + orgao + (sincronizado ? "" : " · salvo localmente, será sincronizado"));
+    logRow(nome, orgao, sincronizado, tipo);
     checkinsSessao++;
     updateCounter();
   }
