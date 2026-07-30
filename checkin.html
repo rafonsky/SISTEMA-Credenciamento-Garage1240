@@ -888,8 +888,9 @@
     }
   });
 
-  document.getElementById("telaCheckin").addEventListener("click", () => scanInput.focus());
+  document.getElementById("telaCheckin").addEventListener("click", () => { if (!cameraAtiva) scanInput.focus(); });
   setInterval(() => {
+    if (cameraAtiva) return;
     if (document.getElementById("telaCheckin").classList.contains("hidden")) return;
     if (document.activeElement !== scanInput) scanInput.focus();
   }, 2000);
@@ -901,13 +902,19 @@
   const cameraBox = document.getElementById("cameraBox");
   const cameraAvisoPermissao = document.getElementById("cameraAvisoPermissao");
 
-  btnCamera.addEventListener("click", async () => {
+  btnCamera.addEventListener("click", async (e) => {
+    // Impede que este clique borbulhe pro listener de foco em telaCheckin —
+    // sem isso, ele refocava o campo (e reabria o teclado) antes de
+    // cameraAtiva virar true, desfazendo o blur() logo abaixo.
+    e.stopPropagation();
     if (cameraAtiva) {
       try { await html5QrCode.stop(); } catch (e) {}
       cameraAtiva = false;
       cameraBox.classList.add("hidden");
       btnCamera.textContent = "📷 Câmera";
       btnCamera.classList.remove("ativa");
+      scanInput.removeAttribute("inputmode");
+      scanInput.readOnly = false;
       scanInput.focus();
       return;
     }
@@ -915,6 +922,12 @@
     cameraBox.classList.remove("hidden");
     btnCamera.textContent = "⏹ Parar câmera";
     btnCamera.classList.add("ativa");
+    // Com a câmera ativa, tira o foco do campo de leitura e impede o teclado
+    // virtual de reaparecer (ele cobre a tela por cima, nenhum CSS resolve
+    // isso) — no celular era isso que escondia o flash verde/laranja/vermelho.
+    scanInput.blur();
+    scanInput.setAttribute("inputmode", "none");
+    scanInput.readOnly = true;
     try {
       html5QrCode = new Html5Qrcode("cameraView");
       await html5QrCode.start(
@@ -930,6 +943,8 @@
       cameraBox.classList.add("hidden");
       btnCamera.textContent = "📷 Câmera";
       btnCamera.classList.remove("ativa");
+      scanInput.removeAttribute("inputmode");
+      scanInput.readOnly = false;
     }
   });
 
