@@ -685,6 +685,12 @@
   }
 
   // ---------- leitura / registro ----------
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
   function resetFeedback() {
     feedback.className = "feedback";
     feedback.innerHTML = `<div class="hint">Aguardando leitura…</div>`;
@@ -694,8 +700,8 @@
     feedback.className = "feedback " + tipo;
     feedback.innerHTML = `
       <div class="icon">${iconChar}</div>
-      <div class="nome">${nome}</div>
-      <div class="detalhe">${detalhe}</div>
+      <div class="nome">${escapeHtml(nome)}</div>
+      <div class="detalhe">${escapeHtml(detalhe)}</div>
     `;
   }
 
@@ -703,8 +709,8 @@
     feedback.className = "feedback warn";
     feedback.innerHTML = `
       <div class="icon">⚠</div>
-      <div class="nome">${nome}</div>
-      <div class="detalhe">Já fez check-in nesta sala hoje às ${horarios}.</div>
+      <div class="nome">${escapeHtml(nome)}</div>
+      <div class="detalhe">Já fez check-in nesta sala hoje às ${escapeHtml(horarios)}.</div>
       <div class="warn-actions">
         <button class="btn small" id="btnConfirmarDuplicado">Registrar mesmo assim</button>
         <button class="btn small secondary" id="btnCancelarDuplicado">Cancelar</button>
@@ -719,7 +725,7 @@
   function logRow(nome, orgao, sincronizado) {
     const hora = new Date().toLocaleTimeString("pt-BR");
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${hora}</td><td>${nome}</td><td>${orgao || "-"}</td><td class="${sincronizado ? "" : "pendente"}">${sincronizado ? "" : "pendente"}</td>`;
+    tr.innerHTML = `<td>${hora}</td><td>${escapeHtml(nome)}</td><td>${escapeHtml(orgao) || "-"}</td><td class="${sincronizado ? "" : "pendente"}">${sincronizado ? "" : "pendente"}</td>`;
     logBody.prepend(tr);
   }
 

@@ -119,6 +119,7 @@
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 16px; padding: 28px;
   }
+  .modal.wide { max-width: 660px; }
   .modal h2 { margin: 0 0 20px; font-size: 18px; }
   .sala-row-wrapper { margin-bottom: 10px; }
   .sala-row {
@@ -148,6 +149,44 @@
     padding: 8px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 13px; margin: 8px 0 20px;
   }
   .modal-actions { display: flex; gap: 10px; }
+
+  .sub-label { font-size: 12px; color: var(--muted); display: block; margin: 16px 0 6px; }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--text); margin-bottom: 10px; cursor: pointer;
+  }
+  .checkbox-row input { width: auto; }
+  textarea.field-textarea {
+    width: 100%; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit; margin-bottom: 10px; resize: vertical;
+  }
+  .branding-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .branding-row input[type="color"] { width: 48px; height: 38px; padding: 2px; flex: none; }
+  .branding-row input[type="file"] { flex: 1; font-size: 12px; color: var(--muted); }
+  .logo-preview { max-height: 50px; margin-bottom: 10px; border-radius: 6px; display: block; }
+
+  .campo-row-wrapper, .patrocinador-row-wrapper { margin-bottom: 8px; }
+  .campo-row {
+    display: grid; grid-template-columns: 1fr 120px 60px 60px 28px;
+    gap: 6px; align-items: center;
+  }
+  .campo-row input, .campo-row select {
+    padding: 8px 10px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px; width: 100%;
+  }
+  .campo-row label { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 3px; justify-content: center; }
+  .campo-row label input { width: auto; }
+  .campo-opcoes {
+    width: 100%; margin-top: 4px; padding: 6px 10px; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px;
+  }
+  .patrocinador-row { display: grid; grid-template-columns: 1fr 1fr 28px; gap: 6px; align-items: center; }
+  .patrocinador-row input { font-size: 12px; }
+  .patrocinador-preview { max-height: 36px; margin-top: 4px; border-radius: 4px; }
+
+  .consulta-resultado-item { position: relative; }
+  .consulta-acoes { display: flex; gap: 8px; margin-top: 4px; }
+  .consulta-acoes button { font-size: 12px; padding: 6px 10px; }
 
   .consulta-resultado-item {
     width: 100%; text-align: left; background: var(--panel2);
@@ -214,7 +253,7 @@
 
   <!-- ===================== MODAL: NOVO EVENTO ===================== -->
   <div class="modal-overlay hidden" id="modalOverlay">
-    <div class="modal">
+    <div class="modal wide">
       <h2 id="modalTitulo">Novo evento</h2>
       <input type="hidden" id="eventoIdEditando" value="">
       <div class="field">
@@ -234,6 +273,41 @@
         <label>Salas</label>
         <div id="salasContainer"></div>
         <button type="button" class="add-sala-btn" id="btnAddSala">+ adicionar sala</button>
+      </div>
+
+      <div class="field">
+        <label>Inscrição pública</label>
+        <label class="checkbox-row"><input type="checkbox" id="inscricaoAtiva"> Inscrições abertas</label>
+        <input type="text" id="inscricaoSigla" placeholder="Sigla do código (ex: CDC26)" style="margin-bottom:10px;">
+        <textarea id="inscricaoTermoLgpd" class="field-textarea" rows="4" placeholder="Texto do termo de consentimento LGPD, mostrado na inscrição"></textarea>
+
+        <span class="sub-label">Identidade visual</span>
+        <div class="branding-row">
+          <input type="color" id="inscricaoCor" value="#4f8cff">
+          <input type="file" id="inscricaoLogoInput" accept="image/*">
+        </div>
+        <img id="inscricaoLogoPreview" class="logo-preview hidden">
+        <select id="inscricaoLayout" style="margin-bottom:10px;">
+          <option value="classico">Layout: Clássico</option>
+          <option value="hero" disabled>Layout: Hero (em breve)</option>
+          <option value="split" disabled>Layout: Split (em breve)</option>
+        </select>
+
+        <span class="sub-label">Patrocinadores (faixa de apoio)</span>
+        <div id="patrocinadoresContainer"></div>
+        <button type="button" class="add-sala-btn" id="btnAddPatrocinador">+ adicionar patrocinador</button>
+
+        <label class="checkbox-row"><input type="checkbox" id="inscricaoImpedirDuplicidade" checked> Impedir e-mail duplicado no mesmo evento</label>
+
+        <span class="sub-label">Campos do formulário</span>
+        <div id="camposContainer"></div>
+        <button type="button" class="add-sala-btn" id="btnAddCampo">+ adicionar campo</button>
+
+        <span class="sub-label">Código impresso na etiqueta/crachá</span>
+        <select id="inscricaoTipoCodigo">
+          <option value="qrcode">QR Code</option>
+          <option value="barras">Código de barras</option>
+        </select>
       </div>
 
       <div class="modal-actions">
@@ -269,6 +343,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
@@ -282,8 +357,15 @@
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+  const storage = firebase.storage();
 
   let usuarioAtual = null; // { uid, nome, papel, eventos_permitidos }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
 
   // ---------- LOGIN ----------
   document.getElementById("btnLogin").addEventListener("click", async () => {
@@ -395,6 +477,7 @@
       ).join("");
       div.innerHTML = `
         <div class="card-actions">
+          <a class="copiar-link-inscricao" data-id="${ev.id}">Link de inscrição</a>
           <a class="editar-evento" data-id="${ev.id}">Editar</a>
           <a class="excluir-evento danger" data-id="${ev.id}" data-nome="${ev.nome}">Excluir</a>
         </div>
@@ -404,6 +487,7 @@
       `;
       div.querySelector(".editar-evento").addEventListener("click", () => abrirModalEdicao(ev));
       div.querySelector(".excluir-evento").addEventListener("click", () => excluirEvento(ev.id, ev.nome));
+      div.querySelector(".copiar-link-inscricao").addEventListener("click", () => copiarLinkInscricao(ev.id));
       div.querySelectorAll(".copiar-link-sala").forEach(a => {
         a.addEventListener("click", (e) => {
           e.preventDefault();
@@ -412,6 +496,14 @@
       });
       listEl.appendChild(div);
     });
+  }
+
+  function copiarLinkInscricao(eventoId) {
+    const url = new URL("inscricao.html", location.href);
+    url.searchParams.set("evento", eventoId);
+    navigator.clipboard.writeText(url.toString())
+      .then(() => alert("Link de inscrição copiado:\n" + url.toString()))
+      .catch(() => prompt("Copie o link abaixo:", url.toString()));
   }
 
   function copiarLinkSala(eventoId, salaId) {
@@ -443,8 +535,20 @@
   // ---------- MODAL NOVO EVENTO ----------
   const modalOverlay = document.getElementById("modalOverlay");
   const salasContainer = document.getElementById("salasContainer");
+  const camposContainer = document.getElementById("camposContainer");
+  const patrocinadoresContainer = document.getElementById("patrocinadoresContainer");
+
+  const CAMPOS_PADRAO = [
+    { id: "nome", label: "Nome completo", tipo: "texto", obrigatorio: true },
+    { id: "email", label: "E-mail", tipo: "email", obrigatorio: true },
+    { id: "orgao", label: "Órgão", tipo: "texto", obrigatorio: false },
+    { id: "cargo", label: "Cargo/Função", tipo: "texto", obrigatorio: false },
+  ];
+
+  let eventoEditando = null; // evento completo sendo editado, ou null se for novo
 
   document.getElementById("btnNovoEvento").addEventListener("click", () => {
+    eventoEditando = null;
     document.getElementById("modalTitulo").textContent = "Novo evento";
     document.getElementById("eventoIdEditando").value = "";
     document.getElementById("eventoNome").value = "";
@@ -453,10 +557,12 @@
     salasContainer.innerHTML = "";
     document.getElementById("eventoError").classList.add("hidden");
     adicionarLinhaSala();
+    preencherInscricao(null);
     modalOverlay.classList.remove("hidden");
   });
 
   function abrirModalEdicao(ev) {
+    eventoEditando = ev;
     document.getElementById("modalTitulo").textContent = "Editar evento";
     document.getElementById("eventoIdEditando").value = ev.id;
     document.getElementById("eventoNome").value = ev.nome || "";
@@ -465,7 +571,131 @@
     salasContainer.innerHTML = "";
     document.getElementById("eventoError").classList.add("hidden");
     (ev.salas && ev.salas.length ? ev.salas : [{}]).forEach(s => adicionarLinhaSala(s));
+    preencherInscricao(ev);
     modalOverlay.classList.remove("hidden");
+  }
+
+  function preencherInscricao(ev) {
+    const inscricao = ev?.inscricao || {};
+    const branding = ev?.branding || {};
+    document.getElementById("inscricaoAtiva").checked = !!inscricao.ativa;
+    document.getElementById("inscricaoSigla").value = inscricao.sigla || "";
+    document.getElementById("inscricaoTermoLgpd").value = inscricao.termo_lgpd || "";
+    document.getElementById("inscricaoCor").value = branding.cor_primaria || "#4f8cff";
+    document.getElementById("inscricaoLogoInput").value = "";
+    const preview = document.getElementById("inscricaoLogoPreview");
+    if (branding.logo_url) {
+      preview.src = branding.logo_url;
+      preview.classList.remove("hidden");
+    } else {
+      preview.classList.add("hidden");
+    }
+    document.getElementById("inscricaoLayout").value = branding.layout_id || "classico";
+    document.getElementById("inscricaoImpedirDuplicidade").checked = inscricao.impedir_duplicidade_email !== false;
+    document.getElementById("inscricaoTipoCodigo").value = inscricao.etiqueta?.tipo_codigo || "qrcode";
+
+    patrocinadoresContainer.innerHTML = "";
+    (branding.patrocinadores || []).forEach(p => adicionarLinhaPatrocinador(p));
+
+    const camposEtiquetaIds = new Set(inscricao.etiqueta?.campos_ids || []);
+    const campos = inscricao.campos && inscricao.campos.length ? inscricao.campos : CAMPOS_PADRAO;
+    camposContainer.innerHTML = "";
+    campos.forEach(c => adicionarLinhaCampo(c, camposEtiquetaIds.has(c.id)));
+  }
+
+  document.getElementById("inscricaoLogoInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const preview = document.getElementById("inscricaoLogoPreview");
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove("hidden");
+  });
+
+  document.getElementById("btnAddPatrocinador").addEventListener("click", () => adicionarLinhaPatrocinador());
+
+  function adicionarLinhaPatrocinador(patrocinador) {
+    patrocinador = patrocinador || {};
+    const wrapper = document.createElement("div");
+    wrapper.className = "patrocinador-row-wrapper";
+    wrapper.innerHTML = `
+      <div class="patrocinador-row">
+        <input type="file" accept="image/*" class="patrocinador-logo-input">
+        <input type="text" placeholder="Link (opcional)" class="patrocinador-link" value="${patrocinador.link || ""}">
+        <button type="button" class="remove-sala">✕</button>
+      </div>
+      <img class="patrocinador-preview ${patrocinador.logo_url ? "" : "hidden"}" src="${patrocinador.logo_url || ""}">
+    `;
+    if (patrocinador.logo_url) wrapper.dataset.logoUrl = patrocinador.logo_url;
+    wrapper.querySelector(".patrocinador-logo-input").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      wrapper._arquivoPendente = file;
+      const preview = wrapper.querySelector(".patrocinador-preview");
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("hidden");
+    });
+    wrapper.querySelector(".remove-sala").addEventListener("click", () => wrapper.remove());
+    patrocinadoresContainer.appendChild(wrapper);
+  }
+
+  document.getElementById("btnAddCampo").addEventListener("click", () => adicionarLinhaCampo());
+
+  function limitarCamposEtiqueta(checkboxAlterado) {
+    const marcados = [...camposContainer.querySelectorAll(".campo-etiqueta:checked")];
+    if (marcados.length > 3) {
+      checkboxAlterado.checked = false;
+      alert("A etiqueta aceita no máximo 3 campos.");
+    }
+  }
+
+  function adicionarLinhaCampo(campo, marcadoNaEtiqueta) {
+    campo = campo || {};
+    const wrapper = document.createElement("div");
+    wrapper.className = "campo-row-wrapper";
+    wrapper.innerHTML = `
+      <div class="campo-row">
+        <input type="text" placeholder="Rótulo (ex: Nome)" class="campo-label" value="${campo.label || ""}">
+        <select class="campo-tipo">
+          <option value="texto">Texto curto</option>
+          <option value="email">E-mail</option>
+          <option value="textarea">Texto longo</option>
+          <option value="select">Lista (select)</option>
+          <option value="checkbox">Caixa de marcar</option>
+        </select>
+        <label><input type="checkbox" class="campo-obrigatorio"> obrig.</label>
+        <label><input type="checkbox" class="campo-etiqueta"> etiqueta</label>
+        <button type="button" class="remove-sala">✕</button>
+      </div>
+      <input type="text" class="campo-opcoes hidden" placeholder="Opções separadas por vírgula (só pra Lista)">
+    `;
+    if (campo.id) wrapper.dataset.campoId = campo.id;
+    if (campo.tipo) wrapper.querySelector(".campo-tipo").value = campo.tipo;
+    if (campo.obrigatorio) wrapper.querySelector(".campo-obrigatorio").checked = true;
+    if (campo.opcoes) wrapper.querySelector(".campo-opcoes").value = campo.opcoes.join(", ");
+    if (marcadoNaEtiqueta) wrapper.querySelector(".campo-etiqueta").checked = true;
+
+    const tipoSelect = wrapper.querySelector(".campo-tipo");
+    const opcoesInput = wrapper.querySelector(".campo-opcoes");
+    function atualizarOpcoesVisibilidade() {
+      opcoesInput.classList.toggle("hidden", tipoSelect.value !== "select");
+    }
+    tipoSelect.addEventListener("change", atualizarOpcoesVisibilidade);
+    atualizarOpcoesVisibilidade();
+
+    wrapper.querySelector(".campo-etiqueta").addEventListener("change", (e) => limitarCamposEtiqueta(e.target));
+    wrapper.querySelector(".remove-sala").addEventListener("click", () => wrapper.remove());
+    camposContainer.appendChild(wrapper);
+  }
+
+  function slugify(texto) {
+    const semAcentos = (texto || "").normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return semAcentos.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+
+  async function enviarArquivoStorage(caminho, file) {
+    const ref = storage.ref(caminho);
+    await ref.put(file);
+    return await ref.getDownloadURL();
   }
 
   document.getElementById("btnCancelarEvento").addEventListener("click", () => {
@@ -551,17 +781,86 @@
 
     const idEditando = document.getElementById("eventoIdEditando").value;
 
+    // Campos do formulário de inscrição — gera um id novo (slug do rótulo,
+    // com um sufixo aleatório se colidir ou vier vazio) só quando a linha
+    // ainda não tem um (campo já existente mantém sempre o mesmo id).
+    const idsUsados = new Set();
+    const campos = [...camposContainer.querySelectorAll(".campo-row-wrapper")].map(wrapper => {
+      const label = wrapper.querySelector(".campo-label").value.trim() || "Campo";
+      let id = wrapper.dataset.campoId;
+      if (!id) {
+        id = slugify(label) || ("campo_" + Date.now().toString(36));
+        while (idsUsados.has(id)) id += "_2";
+      }
+      idsUsados.add(id);
+      const tipo = wrapper.querySelector(".campo-tipo").value;
+      const campo = {
+        id, label, tipo,
+        obrigatorio: wrapper.querySelector(".campo-obrigatorio").checked,
+      };
+      if (tipo === "select") {
+        campo.opcoes = wrapper.querySelector(".campo-opcoes").value.split(",").map(s => s.trim()).filter(Boolean);
+      }
+      if (wrapper.querySelector(".campo-etiqueta").checked) campo._etiqueta = true;
+      return campo;
+    });
+    const camposEtiquetaIds = campos.filter(c => c._etiqueta).map(c => c.id);
+    campos.forEach(c => delete c._etiqueta);
+
+    const patrocinadorWrappers = [...patrocinadoresContainer.querySelectorAll(".patrocinador-row-wrapper")];
+    const patrocinadores = patrocinadorWrappers.map(wrapper => ({
+      logo_url: wrapper.dataset.logoUrl || null,
+      link: wrapper.querySelector(".patrocinador-link").value.trim(),
+    }));
+
+    const termoAtual = document.getElementById("inscricaoTermoLgpd").value;
+    const termoOriginal = eventoEditando?.inscricao?.termo_lgpd || "";
+    const versaoOriginal = eventoEditando?.inscricao?.termo_versao || 0;
+    const termoVersao = termoAtual !== termoOriginal ? versaoOriginal + 1 : versaoOriginal;
+
+    const inscricao = {
+      ativa: document.getElementById("inscricaoAtiva").checked,
+      sigla: document.getElementById("inscricaoSigla").value.trim(),
+      termo_lgpd: termoAtual,
+      termo_versao: termoVersao,
+      campos,
+      etiqueta: {
+        campos_ids: camposEtiquetaIds,
+        tipo_codigo: document.getElementById("inscricaoTipoCodigo").value,
+      },
+      impedir_duplicidade_email: document.getElementById("inscricaoImpedirDuplicidade").checked,
+    };
+    const branding = {
+      cor_primaria: document.getElementById("inscricaoCor").value,
+      layout_id: document.getElementById("inscricaoLayout").value,
+      logo_url: eventoEditando?.branding?.logo_url || null,
+      patrocinadores,
+    };
+
     try {
-      if (idEditando) {
-        await db.collection("eventos").doc(idEditando).update({ nome, data, local, salas });
-      } else {
-        await db.collection("eventos").add({
-          nome, data, local, salas,
-          branding: { logo_cliente_url: null, logos_patrocinadores: [], cor_primaria: null, layout_id: null },
+      let eventoId = idEditando;
+      if (!eventoId) {
+        const ref = await db.collection("eventos").add({
+          nome, data, local, salas, branding, inscricao,
           criado_em: firebase.firestore.FieldValue.serverTimestamp(),
           criado_por: usuarioAtual.uid,
         });
+        eventoId = ref.id;
+        await db.collection("eventos").doc(eventoId).collection("contadores").doc("inscricao").set({ proximo: 1 });
       }
+
+      const logoFile = document.getElementById("inscricaoLogoInput").files[0];
+      if (logoFile) {
+        branding.logo_url = await enviarArquivoStorage(`logos/${eventoId}/principal-${Date.now()}`, logoFile);
+      }
+      for (let i = 0; i < patrocinadorWrappers.length; i++) {
+        if (patrocinadorWrappers[i]._arquivoPendente) {
+          patrocinadores[i].logo_url = await enviarArquivoStorage(`logos/${eventoId}/patrocinador-${i}-${Date.now()}`, patrocinadorWrappers[i]._arquivoPendente);
+        }
+      }
+
+      await db.collection("eventos").doc(eventoId).set({ nome, data, local, salas, branding, inscricao }, { merge: true });
+
       modalOverlay.classList.add("hidden");
       carregarEventos();
     } catch (e) {
@@ -659,7 +958,7 @@
     encontrados.slice(0, 20).forEach(p => {
       const div = document.createElement("div");
       div.className = "consulta-resultado-item";
-      div.innerHTML = `${p.nome_cracha || p.nome || p.codigo}<small>${p.codigo}${p.orgao ? " · " + p.orgao : ""}</small>`;
+      div.innerHTML = `${escapeHtml(p.nome_cracha || p.nome || p.codigo)}<small>${escapeHtml(p.codigo)}${p.orgao ? " · " + escapeHtml(p.orgao) : ""}</small>`;
       div.addEventListener("click", () => mostrarHistoricoParticipante(p));
       consultaResultados.appendChild(div);
     });
@@ -679,27 +978,68 @@
         return { ts, sala: consultaSalasPorId.get(data.sala) || data.sala_nome || data.sala };
       }).sort((a, b) => b.ts - a.ts);
 
+      const acoesHtml = `
+        <div class="consulta-acoes">
+          <button class="btn small secondary" id="btnImprimirEtiquetaConsulta">Imprimir etiqueta</button>
+          <button class="btn small secondary" id="btnExcluirParticipante" style="color: var(--err);">Excluir dados (LGPD)</button>
+        </div>
+      `;
+
       if (!registros.length) {
-        consultaHistorico.innerHTML = "<div class='empty-state'>Nenhum check-in registrado pra este participante neste evento.</div>";
-        return;
+        consultaHistorico.innerHTML = acoesHtml + "<div class='empty-state'>Nenhum check-in registrado pra este participante neste evento.</div>";
+      } else {
+        const ultimo = registros[0];
+        const linhas = registros.map(r => `<tr><td>${formatarDataHora(r.ts)}</td><td>${r.sala}</td></tr>`).join("");
+        consultaHistorico.innerHTML = acoesHtml + `
+          <div class="consulta-atual">
+            <div class="label">Última leitura registrada</div>
+            <div class="valor">${ultimo.sala} · ${formatarDataHora(ultimo.ts)}</div>
+            <div class="aviso">Baseado no último check-in — não é rastreamento em tempo real, só indica por onde a pessoa passou por último.</div>
+          </div>
+          <table class="consulta-historico-table">
+            <thead><tr><th>Data/hora</th><th>Sala</th></tr></thead>
+            <tbody>${linhas}</tbody>
+          </table>
+        `;
       }
 
-      const ultimo = registros[0];
-      const linhas = registros.map(r => `<tr><td>${formatarDataHora(r.ts)}</td><td>${r.sala}</td></tr>`).join("");
-
-      consultaHistorico.innerHTML = `
-        <div class="consulta-atual">
-          <div class="label">Última leitura registrada</div>
-          <div class="valor">${ultimo.sala} · ${formatarDataHora(ultimo.ts)}</div>
-          <div class="aviso">Baseado no último check-in — não é rastreamento em tempo real, só indica por onde a pessoa passou por último.</div>
-        </div>
-        <table class="consulta-historico-table">
-          <thead><tr><th>Data/hora</th><th>Sala</th></tr></thead>
-          <tbody>${linhas}</tbody>
-        </table>
-      `;
+      document.getElementById("btnImprimirEtiquetaConsulta").addEventListener("click", () => imprimirEtiqueta(eventoId, participante));
+      document.getElementById("btnExcluirParticipante").addEventListener("click", () => excluirParticipanteLgpd(eventoId, participante));
     } catch (e) {
       consultaHistorico.innerHTML = `<div class='empty-state'>Erro ao carregar histórico: ${e.message}</div>`;
+    }
+  }
+
+  function imprimirEtiqueta(eventoId, participante) {
+    // Reaproveita o renderizador de etiqueta da própria página de inscrição,
+    // em vez de duplicar a lógica de QR/código de barras aqui.
+    const url = new URL("inscricao.html", location.href);
+    url.searchParams.set("evento", eventoId);
+    url.searchParams.set("reimprimir", participante.codigo);
+    window.open(url.toString(), "_blank");
+  }
+
+  async function excluirParticipanteLgpd(eventoId, participante) {
+    const nomeExibicao = participante.nome_cracha || participante.nome || participante.codigo;
+    const confirmado = confirm(`Excluir TODOS os dados de "${nomeExibicao}" (código ${participante.codigo}) neste evento?\n\nIsso apaga o cadastro e todos os check-ins registrados. Não pode ser desfeito.`);
+    if (!confirmado) return;
+    try {
+      const batch = db.batch();
+      batch.delete(db.collection("participantes").doc(eventoId).collection("lista").doc(participante.codigo));
+      if (participante.email) {
+        batch.delete(db.collection("participantes").doc(eventoId).collection("emails").doc(participante.email.trim().toLowerCase()));
+      }
+      const checkinsSnap = await db.collection("checkins").doc(eventoId).collection("logs")
+        .where("participante_id", "==", participante.codigo).get();
+      checkinsSnap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      alert("Dados excluídos com sucesso.");
+      consultaParticipantesCache.delete(participante.codigo);
+      consultaResultados.innerHTML = "";
+      consultaHistorico.classList.add("hidden");
+      consultaBusca.value = "";
+    } catch (e) {
+      alert("Erro ao excluir: " + e.message);
     }
   }
 

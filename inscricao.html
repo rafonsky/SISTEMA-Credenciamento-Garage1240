@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inscrição</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d24;
+    --panel2: #22262f;
+    --border: #2a2e38;
+    --text: #eef0f3;
+    --muted: #8b93a3;
+    --err: #e0533d;
+    --accent: #4f8cff;
+    --accent-hover: #3d7ae0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  .hidden { display: none !important; }
+
+  .center-screen {
+    min-height: 70vh; width: 100%; max-width: 480px;
+    display: flex; flex-direction: column; justify-content: center;
+    align-items: center; text-align: center; gap: 14px;
+  }
+  .center-screen h1 { font-size: 19px; margin: 0; }
+  .center-screen p { color: var(--muted); font-size: 14px; margin: 0; }
+  .box {
+    width: 100%; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+
+  #brandLogo { max-height: 64px; margin-bottom: 14px; }
+  #faixaPatrocinio {
+    display: flex; gap: 14px; align-items: center; justify-content: center;
+    flex-wrap: wrap; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);
+    width: 100%; max-width: 480px;
+  }
+  #faixaPatrocinio img { max-height: 34px; opacity: 0.85; }
+
+  #telaFormulario { width: 100%; max-width: 480px; }
+  .form-header { text-align: center; margin-bottom: 20px; }
+  .form-header h1 { font-size: 20px; margin: 0 0 4px; }
+  .form-header p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  .form-field { margin-bottom: 14px; }
+  .form-field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .form-field input, .form-field select, .form-field textarea {
+    width: 100%; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  .form-field input[type="checkbox"] { width: auto; margin-right: 6px; }
+
+  .lgpd-box {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; margin-bottom: 14px;
+  }
+  .lgpd-texto { max-height: 140px; overflow-y: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; margin-bottom: 10px; }
+  .lgpd-check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+  .lgpd-check input { width: auto; margin-top: 3px; }
+
+  .btn {
+    width: 100%; padding: 12px; border: none; border-radius: 8px;
+    background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+  .btn + .btn { margin-top: 10px; }
+  .error-msg { color: var(--err); font-size: 13px; margin-top: 10px; }
+
+  /* ---------- confirmação ---------- */
+  #telaConfirmacao { width: 100%; max-width: 420px; text-align: center; }
+  #telaConfirmacao .box { display: flex; flex-direction: column; align-items: center; }
+  #confirmacaoCodigo { font-size: 26px; font-weight: 700; letter-spacing: 1px; margin: 6px 0 16px; }
+  #confirmacaoQrContainer { margin-bottom: 16px; border-radius: 8px; overflow: hidden; }
+
+  /* ---------- etiqueta (impressão) ---------- */
+  #telaEtiqueta { width: 100%; max-width: 360px; }
+  .etiqueta-box {
+    background: white; color: #111; border-radius: 10px; padding: 18px;
+    text-align: center; width: 100%;
+  }
+  .etiqueta-campo { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  #etiquetaCodigoContainer { margin-top: 10px; display: flex; justify-content: center; }
+  #etiquetaCodigoContainer canvas, #etiquetaCodigoContainer svg { max-width: 100%; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #telaEtiqueta, #telaEtiqueta * { visibility: visible; }
+    #telaEtiqueta { position: absolute; top: 0; left: 0; max-width: none; }
+    .no-print { display: none !important; }
+    @page { size: 90mm 60mm; margin: 4mm; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="telaCarregando" class="center-screen"><p>Carregando…</p></div>
+
+  <div id="telaErro" class="center-screen hidden">
+    <div class="box">
+      <h1>Não foi possível abrir a inscrição</h1>
+      <p id="telaErroMsg"></p>
+    </div>
+  </div>
+
+  <div id="telaFechada" class="center-screen hidden">
+    <div class="box">
+      <h1>Inscrições não abertas</h1>
+      <p>As inscrições para este evento ainda não estão disponíveis ou já foram encerradas.</p>
+    </div>
+  </div>
+
+  <div id="telaFormulario" class="hidden">
+    <img id="brandLogo" class="hidden">
+    <div class="form-header">
+      <h1 id="eventoNomeTitulo"></h1>
+      <p>Preencha seus dados pra se inscrever</p>
+    </div>
+
+    <form id="formInscricao" class="box">
+      <div id="camposFormContainer"></div>
+
+      <div class="lgpd-box">
+        <div class="lgpd-texto" id="termoLgpdTexto"></div>
+        <label class="lgpd-check">
+          <input type="checkbox" id="lgpdCheckbox">
+          Li e concordo com os termos de uso dos meus dados.
+        </label>
+      </div>
+
+      <!-- campo-armadilha contra bots: invisível e nunca preenchido por gente de verdade -->
+      <div style="position:absolute; left:-9999px; top:-9999px;" aria-hidden="true">
+        <label>Deixe este campo em branco</label>
+        <input type="text" id="honeypot" name="website" tabindex="-1" autocomplete="off">
+      </div>
+
+      <button type="submit" class="btn" id="btnEnviarInscricao">Confirmar inscrição</button>
+      <div class="error-msg hidden" id="formError"></div>
+    </form>
+
+    <div id="faixaPatrocinio" class="hidden"></div>
+  </div>
+
+  <div id="telaConfirmacao" class="hidden">
+    <div class="box">
+      <h1>Inscrição confirmada</h1>
+      <p id="confirmacaoNome"></p>
+      <div id="confirmacaoCodigo"></div>
+      <div id="confirmacaoQrContainer"></div>
+      <button class="btn no-print" id="btnBaixarComprovante">Baixar comprovante (PDF)</button>
+      <button class="btn secondary no-print" id="btnImprimirEtiqueta">Imprimir etiqueta</button>
+    </div>
+  </div>
+
+  <div id="telaEtiqueta" class="hidden">
+    <div class="etiqueta-box">
+      <div id="etiquetaCampos"></div>
+      <div id="etiquetaCodigoContainer"></div>
+    </div>
+    <button class="btn secondary no-print" id="btnVoltarDaEtiqueta" style="margin-top:14px;">Voltar</button>
+    <button class="btn no-print" id="btnImprimirAgora" style="margin-top:10px;">Imprimir</button>
+  </div>
+
+<!-- ====================== FIREBASE ====================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
+<!-- QR code, código de barras e PDF — versões fixadas (nunca @latest), mesma
+     lógica de não deixar o conteúdo do CDN mudar sem a gente saber. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
+    authDomain: "checkin-de-participantes.firebaseapp.com",
+    projectId: "checkin-de-participantes",
+    storageBucket: "checkin-de-participantes.firebasestorage.app",
+    messagingSenderId: "146226402909",
+    appId: "1:146226402909:web:50f7f5c95a366894439fb4"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  // App Check (reCAPTCHA v3) — proteção contra inscrições automatizadas por
+  // bot. Só ativa depois que a chave de site real for colada aqui (gerada em
+  // https://www.google.com/recaptcha/admin, tipo reCAPTCHA v3) E o App Check
+  // for habilitado pro projeto no Console do Firebase. Enquanto a chave
+  // continuar com o valor abaixo, isso fica desligado (não quebra nada).
+  const RECAPTCHA_SITE_KEY = "COLE_AQUI_A_CHAVE_RECAPTCHA_V3";
+  if (RECAPTCHA_SITE_KEY && RECAPTCHA_SITE_KEY !== "COLE_AQUI_A_CHAVE_RECAPTCHA_V3") {
+    firebase.appCheck().activate(RECAPTCHA_SITE_KEY, true);
+  }
+
+  const params = new URLSearchParams(location.search);
+  const eventoId = params.get("evento");
+  const codigoReimpressao = params.get("reimprimir");
+
+  let eventoAtual = null;
+  let ultimoCodigoGerado = null;
+  let ultimosDadosParticipante = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  const telas = ["telaCarregando", "telaErro", "telaFechada", "telaFormulario", "telaConfirmacao", "telaEtiqueta"];
+  function mostrarTela(id) {
+    telas.forEach(t => document.getElementById(t).classList.toggle("hidden", t !== id));
+  }
+  function mostrarErro(msg) {
+    document.getElementById("telaErroMsg").textContent = msg;
+    mostrarTela("telaErro");
+  }
+
+  async function iniciar() {
+    if (!eventoId) {
+      mostrarErro('Este link está incompleto: falta o parâmetro "evento" na URL.');
+      return;
+    }
+    try {
+      await auth.signInAnonymously();
+    } catch (e) {
+      mostrarErro("Não foi possível conectar ao Firebase: " + e.message);
+      return;
+    }
+    try {
+      const doc = await db.collection("eventos").doc(eventoId).get();
+      if (!doc.exists) { mostrarErro("Evento não encontrado. Verifique o link."); return; }
+      eventoAtual = { id: doc.id, ...doc.data() };
+    } catch (e) {
+      mostrarErro("Não foi possível carregar o evento. Verifique sua conexão.");
+      return;
+    }
+
+    document.body.dataset.layout = eventoAtual.branding?.layout_id || "classico";
+    aplicarBranding(eventoAtual.branding || {});
+
+    if (codigoReimpressao) {
+      await mostrarReimpressao(codigoReimpressao);
+      return;
+    }
+
+    if (!eventoAtual.inscricao || !eventoAtual.inscricao.ativa) {
+      mostrarTela("telaFechada");
+      return;
+    }
+
+    renderizarFormulario(eventoAtual.inscricao);
+    mostrarTela("telaFormulario");
+  }
+
+  function aplicarBranding(branding) {
+    if (branding.cor_primaria) {
+      document.documentElement.style.setProperty("--accent", branding.cor_primaria);
+      document.documentElement.style.setProperty("--accent-hover", branding.cor_primaria);
+    }
+    const logo = document.getElementById("brandLogo");
+    if (branding.logo_url) {
+      logo.src = branding.logo_url;
+      logo.classList.remove("hidden");
+    }
+    const faixa = document.getElementById("faixaPatrocinio");
+    const patrocinadores = (branding.patrocinadores || []).filter(p => p.logo_url);
+    if (patrocinadores.length) {
+      faixa.innerHTML = patrocinadores.map(p => {
+        const img = `<img src="${escapeHtml(p.logo_url)}">`;
+        return p.link ? `<a href="${escapeHtml(p.link)}" target="_blank" rel="noopener">${img}</a>` : img;
+      }).join("");
+      faixa.classList.remove("hidden");
+    }
+  }
+
+  function renderizarFormulario(inscricao) {
+    document.getElementById("eventoNomeTitulo").textContent = eventoAtual.nome || "";
+    const container = document.getElementById("camposFormContainer");
+    container.innerHTML = "";
+    (inscricao.campos || []).forEach(campo => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "form-field";
+
+      if (campo.tipo === "checkbox") {
+        const label = document.createElement("label");
+        label.style.display = "flex";
+        label.style.alignItems = "center";
+        label.style.gap = "8px";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.dataset.campoId = campo.id;
+        input.className = "campo-dinamico";
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(campo.label + (campo.obrigatorio ? " *" : "")));
+        wrapper.appendChild(label);
+        container.appendChild(wrapper);
+        return;
+      }
+
+      const label = document.createElement("label");
+      label.textContent = campo.label + (campo.obrigatorio ? " *" : "");
+      wrapper.appendChild(label);
+
+      let input;
+      if (campo.tipo === "textarea") {
+        input = document.createElement("textarea");
+        input.rows = 3;
+      } else if (campo.tipo === "select") {
+        input = document.createElement("select");
+        const optVazia = document.createElement("option");
+        optVazia.value = "";
+        optVazia.textContent = "Selecione…";
+        input.appendChild(optVazia);
+        (campo.opcoes || []).forEach(op => {
+          const opt = document.createElement("option");
+          opt.value = op;
+          opt.textContent = op;
+          input.appendChild(opt);
+        });
+      } else {
+        input = document.createElement("input");
+        input.type = campo.tipo === "email" ? "email" : "text";
+      }
+      input.dataset.campoId = campo.id;
+      input.className = "campo-dinamico";
+      if (campo.obrigatorio) input.required = true;
+      wrapper.appendChild(input);
+      container.appendChild(wrapper);
+    });
+
+    document.getElementById("termoLgpdTexto").textContent = inscricao.termo_lgpd || "Nenhum termo configurado.";
+  }
+
+  document.getElementById("formInscricao").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("formError");
+    errEl.classList.add("hidden");
+
+    if (document.getElementById("honeypot").value) return; // bot: descarta silenciosamente
+
+    if (!document.getElementById("lgpdCheckbox").checked) {
+      errEl.textContent = "Você precisa concordar com o termo pra continuar.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    const respostas = {};
+    let valido = true;
+    document.querySelectorAll(".campo-dinamico").forEach(input => {
+      const campoId = input.dataset.campoId;
+      const valor = input.type === "checkbox" ? input.checked : input.value.trim();
+      if (input.required && !valor) valido = false;
+      respostas[campoId] = valor;
+    });
+    if (!valido) {
+      errEl.textContent = "Preencha todos os campos obrigatórios.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    const email = (respostas.email || "").trim().toLowerCase();
+    const inscricao = eventoAtual.inscricao;
+    const btn = document.getElementById("btnEnviarInscricao");
+    btn.disabled = true;
+
+    try {
+      const resultado = await db.runTransaction(async (tx) => {
+        const contadorRef = db.collection("eventos").doc(eventoId).collection("contadores").doc("inscricao");
+        const contadorDoc = await tx.get(contadorRef);
+        const proximo = contadorDoc.exists ? contadorDoc.data().proximo : 1;
+
+        let emailRef = null;
+        if (inscricao.impedir_duplicidade_email !== false && email) {
+          emailRef = db.collection("participantes").doc(eventoId).collection("emails").doc(email);
+          const emailDoc = await tx.get(emailRef);
+          if (emailDoc.exists) throw new Error("EMAIL_DUPLICADO");
+        }
+
+        const codigo = `${inscricao.sigla || "INS"}-${String(proximo).padStart(4, "0")}`;
+        const participanteRef = db.collection("participantes").doc(eventoId).collection("lista").doc(codigo);
+
+        const dadosParticipante = {
+          ...respostas,
+          origem: "autoinscricao",
+          consentimento_lgpd: {
+            aceito: true,
+            aceito_em: firebase.firestore.FieldValue.serverTimestamp(),
+            termo_versao: inscricao.termo_versao || 1,
+          },
+          criado_em: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        if (respostas.nome && !dadosParticipante.nome_cracha) dadosParticipante.nome_cracha = respostas.nome;
+
+        tx.set(participanteRef, dadosParticipante);
+        if (emailRef) tx.set(emailRef, { criado_em: firebase.firestore.FieldValue.serverTimestamp() });
+        tx.set(contadorRef, { proximo: proximo + 1 }, { merge: true });
+
+        return { codigo, dadosParticipante };
+      });
+
+      mostrarConfirmacao(resultado.codigo, resultado.dadosParticipante);
+    } catch (e) {
+      errEl.textContent = e.message === "EMAIL_DUPLICADO"
+        ? "Este e-mail já está inscrito neste evento."
+        : "Erro ao enviar inscrição: " + e.message;
+      errEl.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function mostrarConfirmacao(codigo, dados) {
+    ultimoCodigoGerado = codigo;
+    ultimosDadosParticipante = dados;
+    document.getElementById("confirmacaoNome").textContent = dados.nome || dados.nome_cracha || "";
+    document.getElementById("confirmacaoCodigo").textContent = codigo;
+    const container = document.getElementById("confirmacaoQrContainer");
+    container.innerHTML = "";
+    new QRCode(container, { text: codigo, width: 200, height: 200 });
+    mostrarTela("telaConfirmacao");
+  }
+
+  document.getElementById("btnBaixarComprovante").addEventListener("click", () => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    pdf.setFontSize(16);
+    pdf.text(eventoAtual.nome || "Comprovante de inscrição", 20, 20);
+    pdf.setFontSize(12);
+    pdf.text(`Nome: ${ultimosDadosParticipante.nome || ultimosDadosParticipante.nome_cracha || ""}`, 20, 35);
+    pdf.text(`Código: ${ultimoCodigoGerado}`, 20, 43);
+    pdf.text(`Data/hora: ${new Date().toLocaleString("pt-BR")}`, 20, 51);
+    const qrImg = document.querySelector("#confirmacaoQrContainer img");
+    if (qrImg) pdf.addImage(qrImg.src, "PNG", 20, 60, 55, 55);
+    pdf.save(`comprovante-${ultimoCodigoGerado}.pdf`);
+  });
+
+  function montarEtiqueta(codigo, dados) {
+    const etiquetaConfig = eventoAtual.inscricao?.etiqueta || {};
+    const camposIds = etiquetaConfig.campos_ids || [];
+
+    const valores = camposIds.map(id => dados[id]).filter(v => v);
+    const camposHtml = valores.length
+      ? valores.map(v => `<div class="etiqueta-campo">${escapeHtml(v)}</div>`).join("")
+      : `<div class="etiqueta-campo">${escapeHtml(dados.nome || dados.nome_cracha || codigo)}</div>`;
+    document.getElementById("etiquetaCampos").innerHTML = camposHtml;
+
+    const codigoContainer = document.getElementById("etiquetaCodigoContainer");
+    codigoContainer.innerHTML = "";
+    if (etiquetaConfig.tipo_codigo === "barras") {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      codigoContainer.appendChild(svg);
+      JsBarcode(svg, codigo, { format: "CODE128", displayValue: true, width: 2, height: 60 });
+    } else {
+      new QRCode(codigoContainer, { text: codigo, width: 140, height: 140 });
+    }
+  }
+
+  document.getElementById("btnImprimirEtiqueta").addEventListener("click", () => {
+    montarEtiqueta(ultimoCodigoGerado, ultimosDadosParticipante);
+    document.getElementById("btnVoltarDaEtiqueta").classList.remove("hidden");
+    mostrarTela("telaEtiqueta");
+  });
+
+  document.getElementById("btnVoltarDaEtiqueta").addEventListener("click", () => {
+    mostrarTela("telaConfirmacao");
+  });
+
+  document.getElementById("btnImprimirAgora").addEventListener("click", () => window.print());
+
+  async function mostrarReimpressao(codigo) {
+    try {
+      const doc = await db.collection("participantes").doc(eventoId).collection("lista").doc(codigo).get();
+      if (!doc.exists) { mostrarErro("Participante não encontrado neste evento."); return; }
+      montarEtiqueta(codigo, doc.data());
+      document.getElementById("btnVoltarDaEtiqueta").classList.add("hidden"); // reimpressão não tem confirmação pra voltar
+      mostrarTela("telaEtiqueta");
+    } catch (e) {
+      mostrarErro("Erro ao carregar participante: " + e.message);
+    }
+  }
+
+  iniciar();
+</script>
+
+</body>
+</html>

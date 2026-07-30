@@ -2,38 +2,75 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function logado() {
+      return request.auth != null;
+    }
+
+    function dadosUsuario() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    // Master gerencia tudo; Admin só os eventos liberados pra ele em
+    // usuarios/{uid}.eventos_permitidos.
+    function podeGerenciarEvento(eventoId) {
+      return logado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        (dadosUsuario().papel == 'master' ||
+         eventoId in dadosUsuario().get('eventos_permitidos', []));
+    }
+
     // Papel/permissões de cada usuário logado
     match /usuarios/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if logado() && request.auth.uid == uid;
       allow write: if false; // só via script de admin (criar_usuario.py)
     }
 
-    // Eventos: qualquer usuário autenticado pode ler a lista (o filtro
-    // de quais eventos aparecem é feito no app, conforme o papel);
-    // criação/edição permitida a qualquer usuário autenticado por
-    // enquanto (refinar para checar papel == master quando necessário)
+    // Eventos: qualquer usuário autenticado pode ler (o filtro de quais
+    // eventos aparecem é feito no app, conforme o papel); escrita restrita
+    // a quem gerencia o evento — fecha o buraco de qualquer sessão anônima
+    // (usada pelo check-in/inscrição pública) poder reescrever eventos.
     match /eventos/{eventoId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if logado();
+      allow write: if podeGerenciarEvento(eventoId);
+
+      // Contador de código da inscrição pública. Criado pelo admin junto
+      // com o evento; a página pública só precisa incrementar +1 por vez,
+      // inclusive autenticada anonimamente.
+      match /contadores/{contadorId} {
+        allow read: if logado();
+        allow create: if logado();
+        allow update: if logado() &&
+          request.resource.data.proximo == resource.data.proximo + 1 &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['proximo']);
+        allow delete: if false;
+      }
     }
 
-    // Participantes e check-ins, organizados por evento
+    // Participantes, organizados por evento
     match /participantes/{eventoId}/lista/{codigo} {
-      allow read: if request.auth != null;
-      allow write: if false; // importação só via script/admin
+      allow read: if logado();
+      // Import (script/admin SDK) grava sem o campo "origem"; a inscrição
+      // pública só pode CRIAR um documento novo (nunca sobrescrever), e só
+      // se o consentimento LGPD estiver marcado.
+      allow create: if logado() &&
+        request.resource.data.origem == 'autoinscricao' &&
+        request.resource.data.consentimento_lgpd.aceito == true;
+      allow update: if false; // nunca editar — só recriar (o que já é bloqueado por não ser create)
+      allow delete: if podeGerenciarEvento(eventoId); // exclusão de dados por pedido LGPD, feita pelo Master/Admin
+    }
+
+    // "Cadeado" de e-mail: impede duas inscrições com o mesmo e-mail no
+    // mesmo evento, mesmo contra um cliente adulterado — uma vez criado,
+    // a regra nunca permite update, então não dá pra "recriar" por cima.
+    match /participantes/{eventoId}/emails/{emailKey} {
+      allow read: if logado();
+      allow create: if logado();
+      allow update: if false;
+      allow delete: if podeGerenciarEvento(eventoId); // libera o e-mail de novo quando os dados são excluídos
     }
 
     match /checkins/{eventoId}/logs/{docId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Coleções antigas (compatibilidade com o protótipo inicial)
-    match /congresso_participantes/{docId} {
-      allow read: if request.auth != null;
-      allow write: if false;
-    }
-    match /congresso_checkins/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if logado();
     }
   }
 }
