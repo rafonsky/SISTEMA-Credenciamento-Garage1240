@@ -10,6 +10,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
 
+    function souMaster() {
+      return logado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+        dadosUsuario().papel == 'master';
+    }
+
     // Master gerencia tudo; Admin só os eventos liberados pra ele em
     // usuarios/{uid}.eventos_permitidos.
     function podeGerenciarEvento(eventoId) {
@@ -19,10 +25,13 @@ service cloud.firestore {
          eventoId in dadosUsuario().get('eventos_permitidos', []));
     }
 
-    // Papel/permissões de cada usuário logado
+    // Papel/permissões de cada usuário logado. Master também pode ler e
+    // editar o papel/eventos_permitidos de qualquer usuário (tela de gestão
+    // de usuários no painel); criação de conta em si continua só via script
+    // (criar_usuario.py), que também cria o documento inicial.
     match /usuarios/{uid} {
-      allow read: if logado() && request.auth.uid == uid;
-      allow write: if false; // só via script de admin (criar_usuario.py)
+      allow read: if logado() && (request.auth.uid == uid || souMaster());
+      allow write: if souMaster();
     }
 
     // Eventos: qualquer usuário autenticado pode ler (o filtro de quais
@@ -56,7 +65,7 @@ service cloud.firestore {
         (request.resource.data.origem == 'autoinscricao' && request.resource.data.consentimento_lgpd.aceito == true)
         || podeGerenciarEvento(eventoId)
       );
-      allow update: if false; // nunca editar — só recriar (o que já é bloqueado por não ser create)
+      allow update: if podeGerenciarEvento(eventoId); // corrigir cadastro, feito pelo Master/Admin
       allow delete: if podeGerenciarEvento(eventoId); // exclusão de dados por pedido LGPD, feita pelo Master/Admin
     }
 

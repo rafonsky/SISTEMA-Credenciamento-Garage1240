@@ -162,7 +162,6 @@
       <div id="confirmacaoCodigo"></div>
       <div id="confirmacaoQrContainer"></div>
       <button class="btn no-print" id="btnBaixarComprovante">Baixar comprovante (PDF)</button>
-      <button class="btn secondary no-print" id="btnImprimirEtiqueta">Imprimir etiqueta</button>
     </div>
   </div>
 
@@ -171,8 +170,7 @@
       <div id="etiquetaCampos"></div>
       <div id="etiquetaCodigoContainer"></div>
     </div>
-    <button class="btn secondary no-print" id="btnVoltarDaEtiqueta" style="margin-top:14px;">Voltar</button>
-    <button class="btn no-print" id="btnImprimirAgora" style="margin-top:10px;">Imprimir</button>
+    <button class="btn no-print" id="btnImprimirAgora" style="margin-top:14px;">Imprimir</button>
   </div>
 
 <!-- ====================== FIREBASE ====================== -->
@@ -475,16 +473,6 @@
     }
   }
 
-  document.getElementById("btnImprimirEtiqueta").addEventListener("click", () => {
-    montarEtiqueta(ultimoCodigoGerado, ultimosDadosParticipante);
-    document.getElementById("btnVoltarDaEtiqueta").classList.remove("hidden");
-    mostrarTela("telaEtiqueta");
-  });
-
-  document.getElementById("btnVoltarDaEtiqueta").addEventListener("click", () => {
-    mostrarTela("telaConfirmacao");
-  });
-
   document.getElementById("btnImprimirAgora").addEventListener("click", () => window.print());
 
   async function mostrarReimpressao(codigo) {
@@ -492,7 +480,6 @@
       const doc = await db.collection("participantes").doc(eventoId).collection("lista").doc(codigo).get();
       if (!doc.exists) { mostrarErro("Participante não encontrado neste evento."); return; }
       montarEtiqueta(codigo, doc.data());
-      document.getElementById("btnVoltarDaEtiqueta").classList.add("hidden"); // reimpressão não tem confirmação pra voltar
       mostrarTela("telaEtiqueta");
     } catch (e) {
       mostrarErro("Erro ao carregar participante: " + e.message);

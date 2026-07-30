@@ -73,10 +73,31 @@
 
   /* ---------- DASHBOARD ---------- */
   #dashboard { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .top-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
   .top-bar h1 { font-size: 18px; margin: 0; }
-  .top-bar .user-info { font-size: 13px; color: var(--muted); }
-  .top-bar .user-info b { color: var(--text); }
+
+  .sidebar-toggle {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    font-size: 18px; line-height: 1; padding: 8px 12px; border-radius: 8px; cursor: pointer;
+  }
+  .sidebar-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 55;
+  }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
+    background: var(--panel); border-right: 1px solid var(--border);
+    z-index: 56; padding: 20px 16px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .sidebar-user { padding: 4px 4px 16px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .sidebar-user b { display: block; font-size: 15px; }
+  .sidebar-user .muted { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .sidebar-link {
+    display: block; padding: 10px 12px; border-radius: 8px;
+    color: var(--text); text-decoration: none; font-size: 14px;
+  }
+  .sidebar-link:hover { background: var(--panel2); }
+  .sidebar-divider { border-top: 1px solid var(--border); margin: 8px 4px; }
 
   .section-header { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 12px; }
   .section-header h2 { font-size: 15px; color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -216,15 +237,21 @@
   <div id="loginScreen">
     <div class="login-box">
       <h1>Painel — Gestão de Eventos</h1>
-      <div class="field">
-        <label>E-mail</label>
-        <input type="email" id="loginEmail" placeholder="seu@email.com">
-      </div>
-      <div class="field">
-        <label>Senha</label>
-        <input type="password" id="loginSenha" placeholder="••••••••">
-      </div>
-      <button class="btn" id="btnLogin">Entrar</button>
+      <form id="formLogin" autocomplete="on">
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <div style="position:relative;">
+            <input type="password" id="loginSenha" placeholder="••••••••" autocomplete="current-password" style="padding-right:56px;">
+            <button type="button" id="btnMostrarSenha" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:4px 6px;">mostrar</button>
+          </div>
+        </div>
+        <label class="checkbox-row"><input type="checkbox" id="loginManterConectado" checked> Manter-me conectado neste navegador</label>
+        <button type="submit" class="btn" id="btnLogin">Entrar</button>
+      </form>
       <div style="text-align:center; color: var(--muted); font-size: 12px; margin: 14px 0;">ou</div>
       <button class="btn secondary" id="btnLoginGoogle">Entrar com Google</button>
       <div class="error-msg hidden" id="loginError"></div>
@@ -234,14 +261,22 @@
   <!-- ===================== DASHBOARD ===================== -->
   <div id="dashboard" class="hidden">
     <div class="top-bar">
+      <button type="button" id="btnToggleSidebar" class="sidebar-toggle">☰</button>
       <h1>Eventos</h1>
-      <div class="user-info">
-        <b id="userNome"></b> — <span id="userPapel"></span>
-        &nbsp;·&nbsp;<a href="#" id="btnConsultaPresenca" class="hidden" style="color: var(--muted);">Consultar presença</a>
-        &nbsp;·&nbsp;<a href="#" id="btnVincularGoogle" style="color: var(--muted);">Vincular conta Google</a>
-        &nbsp;·&nbsp;<a href="#" id="btnLogout" style="color: var(--muted);">Sair</a>
-      </div>
     </div>
+
+    <div id="sidebarOverlay" class="sidebar-overlay hidden"></div>
+    <nav id="sidebar" class="sidebar hidden">
+      <div class="sidebar-user">
+        <b id="userNome"></b>
+        <div class="muted" id="userPapel"></div>
+      </div>
+      <a href="#" id="btnConsultaPresenca" class="sidebar-link hidden">Consultar presença</a>
+      <a href="#" id="btnGerenciarUsuarios" class="sidebar-link hidden">Gerenciar usuários</a>
+      <div class="sidebar-divider"></div>
+      <a href="#" id="btnVincularGoogle" class="sidebar-link">Vincular conta Google</a>
+      <a href="#" id="btnLogout" class="sidebar-link">Sair</a>
+    </nav>
 
     <div class="section-header">
       <h2>Seus eventos</h2>
@@ -339,6 +374,19 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: GERENCIAR USUÁRIOS (só master) ===================== -->
+  <div class="modal-overlay hidden" id="modalUsuariosOverlay">
+    <div class="modal wide">
+      <h2>Gerenciar usuários</h2>
+      <p style="font-size:12px; color: var(--muted); margin-top:-10px;">Criar uma conta nova ainda é feito pelo script <code>criar_usuario.py</code> — aqui dá pra ajustar o papel e os eventos liberados de quem já existe.</p>
+      <div id="usuariosLista"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btnFecharUsuarios">Fechar</button>
+      </div>
+      <div class="error-msg hidden" id="usuariosError"></div>
+    </div>
+  </div>
+
   <!-- ===================== MODAL: CONSULTAR PRESENÇA (só master) ===================== -->
   <div class="modal-overlay hidden" id="modalConsultaOverlay">
     <div class="modal">
@@ -349,8 +397,9 @@
       </div>
       <div class="field">
         <label>Nome ou código do participante</label>
-        <input type="text" id="consultaBusca" placeholder="Digite pelo menos 2 letras…" disabled>
+        <input type="text" id="consultaBusca" placeholder="Selecione um evento pra ver a lista…" disabled>
       </div>
+      <button type="button" class="btn secondary" id="btnExportarListaAssinatura" disabled style="margin-bottom:14px;">Exportar lista pra assinatura (PDF)</button>
       <div id="consultaResultados"></div>
       <div id="consultaHistorico" class="hidden"></div>
       <div class="modal-actions">
@@ -367,6 +416,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <!-- Leitura de planilha (.xlsx/.csv) pra importar participantes. Versão fixada. -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Geração da lista de presença em PDF (mesma versão fixada do inscricao.html). -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
@@ -394,13 +445,45 @@
     return div.innerHTML;
   }
 
+  // ---------- MENU LATERAL ----------
+  const sidebar = document.getElementById("sidebar");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+  function abrirSidebar() {
+    sidebar.classList.remove("hidden");
+    sidebarOverlay.classList.remove("hidden");
+  }
+  function fecharSidebar() {
+    sidebar.classList.add("hidden");
+    sidebarOverlay.classList.add("hidden");
+  }
+  document.getElementById("btnToggleSidebar").addEventListener("click", abrirSidebar);
+  sidebarOverlay.addEventListener("click", fecharSidebar);
+  sidebar.querySelectorAll(".sidebar-link").forEach(a => a.addEventListener("click", fecharSidebar));
+
   // ---------- LOGIN ----------
-  document.getElementById("btnLogin").addEventListener("click", async () => {
+  document.getElementById("btnMostrarSenha").addEventListener("click", () => {
+    const campo = document.getElementById("loginSenha");
+    const btn = document.getElementById("btnMostrarSenha");
+    const mostrando = campo.type === "text";
+    campo.type = mostrando ? "password" : "text";
+    btn.textContent = mostrando ? "mostrar" : "ocultar";
+  });
+
+  // Formulário de verdade (em vez de só um botão com onclick) é o que faz o
+  // navegador oferecer "lembrar senha" — sem isso a maioria nem reconhece
+  // como um login de verdade.
+  document.getElementById("formLogin").addEventListener("submit", async (e) => {
+    e.preventDefault();
     const email = document.getElementById("loginEmail").value.trim();
     const senha = document.getElementById("loginSenha").value;
+    const manterConectado = document.getElementById("loginManterConectado").checked;
     const errEl = document.getElementById("loginError");
     errEl.classList.add("hidden");
     try {
+      await auth.setPersistence(manterConectado
+        ? firebase.auth.Auth.Persistence.LOCAL
+        : firebase.auth.Auth.Persistence.SESSION);
       await auth.signInWithEmailAndPassword(email, senha);
     } catch (e) {
       errEl.textContent = "E-mail ou senha inválidos.";
@@ -419,6 +502,10 @@
     const errEl = document.getElementById("loginError");
     errEl.classList.add("hidden");
     try {
+      const manterConectado = document.getElementById("loginManterConectado").checked;
+      await auth.setPersistence(manterConectado
+        ? firebase.auth.Auth.Persistence.LOCAL
+        : firebase.auth.Auth.Persistence.SESSION);
       await auth.signInWithPopup(googleProvider);
     } catch (e) {
       if (e.code === "auth/account-exists-with-different-credential") {
@@ -468,6 +555,7 @@
     document.getElementById("userNome").textContent = dados.nome || user.email;
     document.getElementById("userPapel").textContent = dados.papel === "master" ? "Master" : "Admin";
     document.getElementById("btnConsultaPresenca").classList.toggle("hidden", dados.papel !== "master");
+    document.getElementById("btnGerenciarUsuarios").classList.toggle("hidden", dados.papel !== "master");
 
     carregarEventos();
   });
@@ -1044,11 +1132,14 @@
     modalConsultaOverlay.classList.add("hidden");
   });
 
+  const btnExportarListaAssinatura = document.getElementById("btnExportarListaAssinatura");
+
   consultaEventoSelect.addEventListener("change", async () => {
     const eventoId = consultaEventoSelect.value;
     consultaResultados.innerHTML = "";
     consultaHistorico.classList.add("hidden");
     consultaBusca.value = "";
+    btnExportarListaAssinatura.disabled = true;
     if (!eventoId) {
       consultaBusca.disabled = true;
       return;
@@ -1063,19 +1154,88 @@
       const snap = await db.collection("participantes").doc(eventoId).collection("lista").get();
       consultaParticipantesCache = new Map();
       snap.forEach(d => consultaParticipantesCache.set(d.id, d.data()));
-      consultaBusca.placeholder = `Digite pelo menos 2 letras… (${consultaParticipantesCache.size} participantes)`;
+      consultaBusca.placeholder = `Buscar por nome ou código… (${consultaParticipantesCache.size} participantes — em branco mostra todos)`;
       consultaBusca.disabled = false;
+      btnExportarListaAssinatura.disabled = consultaParticipantesCache.size === 0;
+      renderizarResultadosConsulta(listaCompletaOrdenada(), 50);
     } catch (e) {
       document.getElementById("consultaError").textContent = "Erro ao carregar participantes: " + e.message;
       document.getElementById("consultaError").classList.remove("hidden");
     }
   });
 
+  btnExportarListaAssinatura.addEventListener("click", () => {
+    const eventoNome = consultaEventoSelect.selectedOptions[0]?.textContent || "Evento";
+    const lista = listaCompletaOrdenada();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    const margemEsquerda = 15;
+    const margemDireita = 195;
+    const alturaPagina = 285;
+    let y = 20;
+
+    function cabecalho() {
+      pdf.setFontSize(14);
+      pdf.text(eventoNome, margemEsquerda, y);
+      pdf.setFontSize(10);
+      pdf.text("Lista de presença", margemEsquerda, y + 6);
+      y += 16;
+      pdf.setFontSize(11);
+      pdf.text("Nome", margemEsquerda, y);
+      pdf.text("Assinatura", margemDireita - 60, y);
+      y += 4;
+      pdf.line(margemEsquerda, y, margemDireita, y);
+      y += 8;
+    }
+
+    cabecalho();
+    lista.forEach(p => {
+      if (y > alturaPagina) {
+        pdf.addPage();
+        y = 20;
+        cabecalho();
+      }
+      pdf.text(p.nome_cracha || p.nome || p.codigo, margemEsquerda, y);
+      pdf.line(margemDireita - 60, y + 1, margemDireita, y + 1);
+      y += 10;
+    });
+
+    pdf.save(`lista-presenca-${eventoNome.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
+  });
+
+  function listaCompletaOrdenada() {
+    const todos = [];
+    consultaParticipantesCache.forEach((p, codigo) => todos.push({ codigo, ...p }));
+    todos.sort((a, b) => (a.nome_cracha || a.nome || "").localeCompare(b.nome_cracha || b.nome || "", "pt-BR"));
+    return todos;
+  }
+
+  function renderizarResultadosConsulta(lista, limite) {
+    consultaResultados.innerHTML = "";
+    if (!lista.length) {
+      consultaResultados.innerHTML = "<div class='empty-state'>Nenhum participante encontrado.</div>";
+      return;
+    }
+    lista.slice(0, limite).forEach(p => {
+      const div = document.createElement("div");
+      div.className = "consulta-resultado-item";
+      div.innerHTML = `${escapeHtml(p.nome_cracha || p.nome || p.codigo)}<small>${escapeHtml(p.codigo)}${p.orgao ? " · " + escapeHtml(p.orgao) : ""}</small>`;
+      div.addEventListener("click", () => mostrarHistoricoParticipante(p));
+      consultaResultados.appendChild(div);
+    });
+    if (lista.length > limite) {
+      const aviso = document.createElement("div");
+      aviso.className = "empty-state";
+      aviso.textContent = `Mostrando ${limite} de ${lista.length} — digite pra refinar a busca.`;
+      consultaResultados.appendChild(aviso);
+    }
+  }
+
   consultaBusca.addEventListener("input", () => {
     const termo = consultaBusca.value.trim().toLowerCase();
     consultaHistorico.classList.add("hidden");
-    if (termo.length < 2) {
-      consultaResultados.innerHTML = "";
+    if (!termo) {
+      renderizarResultadosConsulta(listaCompletaOrdenada(), 50);
       return;
     }
     const encontrados = [];
@@ -1083,18 +1243,7 @@
       const alvo = `${p.nome || ""} ${p.nome_cracha || ""} ${codigo}`.toLowerCase();
       if (alvo.includes(termo)) encontrados.push({ codigo, ...p });
     });
-    consultaResultados.innerHTML = "";
-    if (!encontrados.length) {
-      consultaResultados.innerHTML = "<div class='empty-state'>Nenhum participante encontrado.</div>";
-      return;
-    }
-    encontrados.slice(0, 20).forEach(p => {
-      const div = document.createElement("div");
-      div.className = "consulta-resultado-item";
-      div.innerHTML = `${escapeHtml(p.nome_cracha || p.nome || p.codigo)}<small>${escapeHtml(p.codigo)}${p.orgao ? " · " + escapeHtml(p.orgao) : ""}</small>`;
-      div.addEventListener("click", () => mostrarHistoricoParticipante(p));
-      consultaResultados.appendChild(div);
-    });
+    renderizarResultadosConsulta(encontrados, 50);
   });
 
   async function mostrarHistoricoParticipante(participante) {
@@ -1113,6 +1262,7 @@
 
       const acoesHtml = `
         <div class="consulta-acoes">
+          <button class="btn small secondary" id="btnEditarParticipante">Editar dados</button>
           <button class="btn small secondary" id="btnImprimirEtiquetaConsulta">Imprimir etiqueta</button>
           <button class="btn small secondary" id="btnExcluirParticipante" style="color: var(--err);">Excluir dados (LGPD)</button>
         </div>
@@ -1138,9 +1288,49 @@
 
       document.getElementById("btnImprimirEtiquetaConsulta").addEventListener("click", () => imprimirEtiqueta(eventoId, participante));
       document.getElementById("btnExcluirParticipante").addEventListener("click", () => excluirParticipanteLgpd(eventoId, participante));
+      document.getElementById("btnEditarParticipante").addEventListener("click", () => mostrarFormularioEdicao(eventoId, participante));
     } catch (e) {
       consultaHistorico.innerHTML = `<div class='empty-state'>Erro ao carregar histórico: ${e.message}</div>`;
     }
+  }
+
+  const CAMPOS_NAO_EDITAVEIS = ["origem", "consentimento_lgpd", "criado_em", "codigo"];
+
+  function mostrarFormularioEdicao(eventoId, participante) {
+    const campos = Object.keys(participante).filter(k => !CAMPOS_NAO_EDITAVEIS.includes(k));
+    const camposHtml = campos.map(k => `
+      <div class="field">
+        <label>${escapeHtml(k)}</label>
+        <input type="text" class="edicao-campo" data-campo="${escapeHtml(k)}" value="${escapeHtml(participante[k])}">
+      </div>
+    `).join("");
+
+    consultaHistorico.innerHTML = `
+      ${camposHtml}
+      <div class="modal-actions">
+        <button class="btn secondary" id="btnCancelarEdicao">Cancelar</button>
+        <button class="btn" id="btnSalvarEdicao">Salvar</button>
+      </div>
+      <div class="error-msg hidden" id="edicaoError"></div>
+    `;
+
+    document.getElementById("btnCancelarEdicao").addEventListener("click", () => mostrarHistoricoParticipante(participante));
+    document.getElementById("btnSalvarEdicao").addEventListener("click", async () => {
+      const atualizacao = {};
+      consultaHistorico.querySelectorAll(".edicao-campo").forEach(input => {
+        atualizacao[input.dataset.campo] = input.value.trim();
+      });
+      try {
+        await db.collection("participantes").doc(eventoId).collection("lista").doc(participante.codigo).update(atualizacao);
+        const atualizado = { ...participante, ...atualizacao };
+        consultaParticipantesCache.set(participante.codigo, atualizado);
+        alert("Dados atualizados com sucesso.");
+        mostrarHistoricoParticipante(atualizado);
+      } catch (e) {
+        document.getElementById("edicaoError").textContent = "Erro ao salvar: " + e.message;
+        document.getElementById("edicaoError").classList.remove("hidden");
+      }
+    });
   }
 
   function imprimirEtiqueta(eventoId, participante) {
@@ -1178,6 +1368,86 @@
 
   function formatarDataHora(d) {
     return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  // ---------- GERENCIAR USUÁRIOS (só master) ----------
+  const modalUsuariosOverlay = document.getElementById("modalUsuariosOverlay");
+
+  document.getElementById("btnGerenciarUsuarios").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("usuariosError");
+    errEl.classList.add("hidden");
+    document.getElementById("usuariosLista").innerHTML = "<div class='empty-state'>Carregando…</div>";
+    modalUsuariosOverlay.classList.remove("hidden");
+    try {
+      const [usuariosSnap, eventosSnap] = await Promise.all([
+        db.collection("usuarios").get(),
+        db.collection("eventos").orderBy("data", "desc").get(),
+      ]);
+      const eventosLista = eventosSnap.docs.map(d => ({ id: d.id, nome: d.data().nome }));
+      renderizarUsuarios(usuariosSnap.docs.map(d => ({ uid: d.id, ...d.data() })), eventosLista);
+    } catch (err) {
+      errEl.textContent = "Erro ao carregar usuários: " + err.message;
+      errEl.classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("btnFecharUsuarios").addEventListener("click", () => {
+    modalUsuariosOverlay.classList.add("hidden");
+  });
+
+  function renderizarUsuarios(usuarios, eventosLista) {
+    const container = document.getElementById("usuariosLista");
+    container.innerHTML = "";
+    usuarios.forEach(u => {
+      const permitidos = new Set(u.eventos_permitidos || []);
+      const div = document.createElement("div");
+      div.className = "event-card";
+      div.innerHTML = `
+        <h3>${escapeHtml(u.nome || u.email)}</h3>
+        <div class="meta">${escapeHtml(u.email)}</div>
+        <div class="field" style="max-width:220px;">
+          <label>Papel</label>
+          <select class="usuario-papel">
+            <option value="admin" ${u.papel === "admin" ? "selected" : ""}>Admin</option>
+            <option value="master" ${u.papel === "master" ? "selected" : ""}>Master</option>
+          </select>
+        </div>
+        <div class="usuario-eventos ${u.papel === "master" ? "hidden" : ""}">
+          <span class="sub-label">Eventos liberados</span>
+          ${eventosLista.map(ev => `
+            <label class="checkbox-row">
+              <input type="checkbox" class="usuario-evento-check" value="${escapeHtml(ev.id)}" ${permitidos.has(ev.id) ? "checked" : ""}>
+              ${escapeHtml(ev.nome)}
+            </label>
+          `).join("")}
+        </div>
+        <button class="btn small" style="margin-top:8px;">Salvar</button>
+        <div class="error-msg hidden" style="margin-top:8px;"></div>
+      `;
+      const papelSelect = div.querySelector(".usuario-papel");
+      const eventosDiv = div.querySelector(".usuario-eventos");
+      papelSelect.addEventListener("change", () => {
+        eventosDiv.classList.toggle("hidden", papelSelect.value === "master");
+      });
+      div.querySelector(".btn.small").addEventListener("click", async () => {
+        const papel = papelSelect.value;
+        const eventosPermitidos = [...div.querySelectorAll(".usuario-evento-check:checked")].map(c => c.value);
+        const linhaErro = div.querySelector(".error-msg");
+        linhaErro.classList.add("hidden");
+        try {
+          await db.collection("usuarios").doc(u.uid).update({
+            papel,
+            eventos_permitidos: papel === "master" ? [] : eventosPermitidos,
+          });
+          alert(`Permissões de ${u.nome || u.email} atualizadas.`);
+        } catch (err) {
+          linhaErro.textContent = "Erro ao salvar: " + err.message;
+          linhaErro.classList.remove("hidden");
+        }
+      });
+      container.appendChild(div);
+    });
   }
 </script>
 
