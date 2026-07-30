@@ -318,6 +318,27 @@
     </div>
   </div>
 
+  <!-- ===================== MODAL: IMPORTAR LISTA ===================== -->
+  <div class="modal-overlay hidden" id="modalImportarOverlay">
+    <div class="modal">
+      <h2>Importar lista de participantes</h2>
+      <p style="font-size:13px; color: var(--muted); margin-top:-10px;">Evento: <b id="importarEventoNome"></b></p>
+      <div class="field">
+        <label>Planilha (.xlsx ou .csv)</label>
+        <input type="file" id="importarArquivoInput" accept=".xlsx,.csv">
+      </div>
+      <p style="font-size:12px; color: var(--muted);">
+        Colunas reconhecidas: <b>Nº Inscrição</b> (obrigatória, vira o código do crachá), Nome, Nome para Crachá, Órgão, Cargo/Função, Estado, E-mail, Situação da inscrição.
+      </p>
+      <div id="importarPreview" class="hidden" style="font-size:13px; color: var(--text); margin-bottom:10px;"></div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="btnCancelarImportar">Cancelar</button>
+        <button class="btn" id="btnConfirmarImportar" disabled>Importar</button>
+      </div>
+      <div class="error-msg hidden" id="importarError"></div>
+    </div>
+  </div>
+
   <!-- ===================== MODAL: CONSULTAR PRESENÇA (só master) ===================== -->
   <div class="modal-overlay hidden" id="modalConsultaOverlay">
     <div class="modal">
@@ -344,6 +365,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<!-- Leitura de planilha (.xlsx/.csv) pra importar participantes. Versão fixada. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
@@ -358,6 +381,10 @@
   const auth = firebase.auth();
   const db = firebase.firestore();
   const storage = firebase.storage();
+  // Explícito (já é o padrão): mantém o login do painel entre recarregamentos.
+  // checkin.html/inscricao.html usam persistência por aba (SESSION) pro login
+  // anônimo deles não substituir esta sessão quando abertos ao mesmo tempo.
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
   let usuarioAtual = null; // { uid, nome, papel, eventos_permitidos }
 
@@ -478,6 +505,7 @@
       div.innerHTML = `
         <div class="card-actions">
           <a class="copiar-link-inscricao" data-id="${ev.id}">Link de inscrição</a>
+          <a class="importar-lista" data-id="${ev.id}" data-nome="${ev.nome}">Importar lista</a>
           <a class="editar-evento" data-id="${ev.id}">Editar</a>
           <a class="excluir-evento danger" data-id="${ev.id}" data-nome="${ev.nome}">Excluir</a>
         </div>
@@ -488,6 +516,7 @@
       div.querySelector(".editar-evento").addEventListener("click", () => abrirModalEdicao(ev));
       div.querySelector(".excluir-evento").addEventListener("click", () => excluirEvento(ev.id, ev.nome));
       div.querySelector(".copiar-link-inscricao").addEventListener("click", () => copiarLinkInscricao(ev.id));
+      div.querySelector(".importar-lista").addEventListener("click", () => abrirModalImportar(ev.id, ev.nome));
       div.querySelectorAll(".copiar-link-sala").forEach(a => {
         a.addEventListener("click", (e) => {
           e.preventDefault();
@@ -514,6 +543,110 @@
       .then(() => alert("Link copiado:\n" + url.toString()))
       .catch(() => prompt("Copie o link abaixo:", url.toString()));
   }
+
+  // ---------- IMPORTAR LISTA DE PARTICIPANTES (.xlsx / .csv) ----------
+  const modalImportarOverlay = document.getElementById("modalImportarOverlay");
+  const importarArquivoInput = document.getElementById("importarArquivoInput");
+  const importarPreview = document.getElementById("importarPreview");
+  const btnConfirmarImportar = document.getElementById("btnConfirmarImportar");
+  const importarError = document.getElementById("importarError");
+
+  let importarEventoId = null;
+  let importarLinhas = null; // [{codigo, dados}]
+
+  function abrirModalImportar(eventoId, eventoNome) {
+    importarEventoId = eventoId;
+    importarLinhas = null;
+    document.getElementById("importarEventoNome").textContent = eventoNome;
+    importarArquivoInput.value = "";
+    importarPreview.classList.add("hidden");
+    importarError.classList.add("hidden");
+    btnConfirmarImportar.disabled = true;
+    modalImportarOverlay.classList.remove("hidden");
+  }
+
+  document.getElementById("btnCancelarImportar").addEventListener("click", () => {
+    modalImportarOverlay.classList.add("hidden");
+  });
+
+  importarArquivoInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    importarError.classList.add("hidden");
+    importarPreview.classList.add("hidden");
+    btnConfirmarImportar.disabled = true;
+    importarLinhas = null;
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: "binary" });
+        const primeiraAba = wb.Sheets[wb.SheetNames[0]];
+        const linhas = XLSX.utils.sheet_to_json(primeiraAba, { defval: "" });
+
+        const participantes = [];
+        const semCodigo = [];
+        linhas.forEach((linha, i) => {
+          const codigo = String(linha["Nº Inscrição"] ?? linha["No Inscrição"] ?? linha["Numero Inscricao"] ?? "").trim();
+          if (!codigo) { semCodigo.push(i + 2); return; } // +2: cabeçalho + índice 1-based
+          participantes.push({
+            codigo,
+            dados: {
+              nome: String(linha["Nome"] || "").trim(),
+              nome_cracha: String(linha["Nome para Crachá"] || "").trim(),
+              orgao: String(linha["Órgão"] || "").trim(),
+              cargo: String(linha["Cargo/Função"] || "").trim(),
+              estado: String(linha["Estado"] || "").trim(),
+              email: String(linha["E-mail"] || "").trim(),
+              situacao_inscricao: String(linha["Situação da inscrição"] || "").trim(),
+            },
+          });
+        });
+
+        if (!participantes.length) {
+          importarError.textContent = 'Nenhuma linha com "Nº Inscrição" preenchida foi encontrada nessa planilha.';
+          importarError.classList.remove("hidden");
+          return;
+        }
+
+        importarLinhas = participantes;
+        importarPreview.textContent = `${participantes.length} participante(s) prontos pra importar`
+          + (semCodigo.length ? ` (${semCodigo.length} linha(s) ignorada(s) por falta de "Nº Inscrição": ${semCodigo.join(", ")})` : "");
+        importarPreview.classList.remove("hidden");
+        btnConfirmarImportar.disabled = false;
+      } catch (err) {
+        importarError.textContent = "Erro ao ler a planilha: " + err.message;
+        importarError.classList.remove("hidden");
+      }
+    };
+    reader.readAsBinaryString(file);
+  });
+
+  btnConfirmarImportar.addEventListener("click", async () => {
+    if (!importarLinhas || !importarLinhas.length) return;
+    btnConfirmarImportar.disabled = true;
+    importarError.classList.add("hidden");
+    try {
+      const listaRef = db.collection("participantes").doc(importarEventoId).collection("lista");
+      let batch = db.batch();
+      let contador = 0;
+      for (const { codigo, dados } of importarLinhas) {
+        batch.set(listaRef.doc(codigo), dados);
+        contador++;
+        if (contador % 450 === 0) {
+          await batch.commit();
+          batch = db.batch();
+        }
+      }
+      await batch.commit();
+      alert(`${importarLinhas.length} participante(s) importado(s) com sucesso.`);
+      modalImportarOverlay.classList.add("hidden");
+    } catch (err) {
+      importarError.textContent = "Erro ao importar: " + err.message;
+      importarError.classList.remove("hidden");
+      btnConfirmarImportar.disabled = false;
+    }
+  });
 
   async function excluirEvento(id, nome) {
     const confirmado = confirm(`Excluir o evento "${nome}"? Isso remove a configuração do evento (nome, salas, branding). Participantes e check-ins já registrados NÃO são apagados automaticamente — se precisar removê-los também, avise.`);

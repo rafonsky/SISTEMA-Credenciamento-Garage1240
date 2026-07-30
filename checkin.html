@@ -360,6 +360,11 @@
     }
 
     try {
+      // Sessão isolada por aba: o Firebase Auth por padrão compartilha o
+      // login entre todas as abas do mesmo site, então sem isso um login
+      // anônimo aqui derrubaria o login do Master aberto no admin.html em
+      // outra aba (e vice-versa).
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
       await auth.signInAnonymously();
     } catch (e) {
       mostrarErro("Não foi possível conectar ao Firebase: " + e.message);

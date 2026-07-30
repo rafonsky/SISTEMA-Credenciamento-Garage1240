@@ -49,12 +49,13 @@ service cloud.firestore {
     // Participantes, organizados por evento
     match /participantes/{eventoId}/lista/{codigo} {
       allow read: if logado();
-      // Import (script/admin SDK) grava sem o campo "origem"; a inscrição
-      // pública só pode CRIAR um documento novo (nunca sobrescrever), e só
-      // se o consentimento LGPD estiver marcado.
-      allow create: if logado() &&
-        request.resource.data.origem == 'autoinscricao' &&
-        request.resource.data.consentimento_lgpd.aceito == true;
+      // Cria um documento novo (nunca sobrescreve) em dois casos: a própria
+      // inscrição pública, com consentimento LGPD marcado, OU quem gerencia
+      // o evento importando uma lista pelo painel.
+      allow create: if logado() && (
+        (request.resource.data.origem == 'autoinscricao' && request.resource.data.consentimento_lgpd.aceito == true)
+        || podeGerenciarEvento(eventoId)
+      );
       allow update: if false; // nunca editar — só recriar (o que já é bloqueado por não ser create)
       allow delete: if podeGerenciarEvento(eventoId); // exclusão de dados por pedido LGPD, feita pelo Master/Admin
     }

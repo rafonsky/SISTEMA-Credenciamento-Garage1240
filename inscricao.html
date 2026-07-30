@@ -237,6 +237,10 @@
       return;
     }
     try {
+      // Sessão isolada por aba: sem isso, o login anônimo aqui derrubaria o
+      // login do Master aberto no admin.html em outra aba (mesmo domínio),
+      // e vice-versa — foi a causa de erros de permissão intermitentes.
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
       await auth.signInAnonymously();
     } catch (e) {
       mostrarErro("Não foi possível conectar ao Firebase: " + e.message);
