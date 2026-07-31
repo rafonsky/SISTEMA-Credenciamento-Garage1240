@@ -350,6 +350,38 @@
         </select>
       </div>
 
+      <div class="field">
+        <label>Certificado</label>
+        <label class="checkbox-row"><input type="checkbox" id="certificadoAtivo"> Certificado ativo pra este evento</label>
+        <div id="certificadoConfigBox" class="hidden">
+          <span class="sub-label">Imagem de fundo (o certificado pronto, tipo moldura — A4 paisagem, 297×210mm)</span>
+          <div class="branding-row">
+            <input type="file" id="certificadoFundoInput" accept="image/*">
+          </div>
+          <img id="certificadoFundoPreview" class="logo-preview hidden">
+
+          <div class="field">
+            <label>Carga horária do evento (horas)</label>
+            <input type="number" id="certificadoCargaHoraria" min="0" step="0.5" value="8">
+          </div>
+
+          <div class="field">
+            <label>Regra de emissão</label>
+            <select id="certificadoRegraEmissao">
+              <option value="credenciado">Qualquer participante credenciado (fez check-in)</option>
+              <option value="frequencia_minima">Exigir frequência mínima (usa entrada/saída da Fase 4)</option>
+            </select>
+          </div>
+          <div class="field hidden" id="certificadoFrequenciaBox">
+            <label>Frequência mínima exigida (% da carga horária)</label>
+            <input type="number" id="certificadoFrequenciaMinima" min="1" max="100" value="75">
+          </div>
+
+          <span class="sub-label">Campos no certificado (posição em mm a partir do canto superior esquerdo)</span>
+          <div id="certificadoCamposContainer"></div>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn secondary" id="btnCancelarEvento">Cancelar</button>
         <button class="btn" id="btnSalvarEvento">Salvar evento</button>
@@ -640,6 +672,7 @@
       div.innerHTML = `
         <div class="card-actions">
           <a class="copiar-link-inscricao" data-id="${ev.id}">Link de inscrição</a>
+          ${ev.certificado?.ativo ? `<a class="copiar-link-certificado" data-id="${ev.id}">Link do certificado</a>` : ""}
           <a class="importar-lista" data-id="${ev.id}" data-nome="${ev.nome}">Importar lista</a>
           <a class="editar-evento" data-id="${ev.id}">Editar</a>
           <a class="excluir-evento danger" data-id="${ev.id}" data-nome="${ev.nome}">Excluir</a>
@@ -651,6 +684,7 @@
       div.querySelector(".editar-evento").addEventListener("click", () => abrirModalEdicao(ev));
       div.querySelector(".excluir-evento").addEventListener("click", () => excluirEvento(ev.id, ev.nome));
       div.querySelector(".copiar-link-inscricao").addEventListener("click", () => copiarLinkInscricao(ev.id));
+      div.querySelector(".copiar-link-certificado")?.addEventListener("click", () => copiarLinkCertificado(ev.id));
       div.querySelector(".importar-lista").addEventListener("click", () => abrirModalImportar(ev.id, ev.nome));
       div.querySelectorAll(".copiar-link-sala").forEach(a => {
         a.addEventListener("click", (e) => {
@@ -667,6 +701,14 @@
     url.searchParams.set("evento", eventoId);
     navigator.clipboard.writeText(url.toString())
       .then(() => alert("Link de inscrição copiado:\n" + url.toString()))
+      .catch(() => prompt("Copie o link abaixo:", url.toString()));
+  }
+
+  function copiarLinkCertificado(eventoId) {
+    const url = new URL("certificado.html", location.href);
+    url.searchParams.set("evento", eventoId);
+    navigator.clipboard.writeText(url.toString())
+      .then(() => alert("Link do certificado copiado:\n" + url.toString()))
       .catch(() => prompt("Copie o link abaixo:", url.toString()));
   }
 
@@ -827,6 +869,7 @@
     document.getElementById("eventoError").classList.add("hidden");
     adicionarLinhaSala();
     preencherInscricao(null);
+    preencherCertificado(null);
     modalOverlay.classList.remove("hidden");
   });
 
@@ -842,6 +885,7 @@
     document.getElementById("eventoError").classList.add("hidden");
     (ev.salas && ev.salas.length ? ev.salas : [{}]).forEach(s => adicionarLinhaSala(s));
     preencherInscricao(ev);
+    preencherCertificado(ev);
     modalOverlay.classList.remove("hidden");
   }
 
@@ -872,6 +916,87 @@
     camposContainer.innerHTML = "";
     campos.forEach(c => adicionarLinhaCampo(c, camposEtiquetaIds.has(c.id)));
   }
+
+  // ---------- CERTIFICADO (Fase 5) ----------
+  // Página A4 paisagem (297x210mm) — campos fixos, cada um com posição x/y em
+  // mm, tamanho de fonte e alinhamento; nada de editor arrastável, é o modo
+  // "simples" combinado com o usuário.
+  const CERTIFICADO_CAMPOS_PADRAO = [
+    { tag: "nome", label: "Nome do participante", x: 148.5, y: 90, tamanho: 22, alinhamento: "centro", ativo: true },
+    { tag: "nome_evento", label: "Nome do evento", x: 148.5, y: 110, tamanho: 14, alinhamento: "centro", ativo: true },
+    { tag: "local_evento", label: "Local do evento", x: 148.5, y: 130, tamanho: 12, alinhamento: "centro", ativo: false },
+    { tag: "data_evento", label: "Data do evento", x: 148.5, y: 145, tamanho: 12, alinhamento: "centro", ativo: true },
+    { tag: "carga_horaria", label: "Carga horária", x: 148.5, y: 160, tamanho: 12, alinhamento: "centro", ativo: true },
+  ];
+
+  const certificadoAtivo = document.getElementById("certificadoAtivo");
+  const certificadoConfigBox = document.getElementById("certificadoConfigBox");
+  const certificadoFundoInput = document.getElementById("certificadoFundoInput");
+  const certificadoFundoPreview = document.getElementById("certificadoFundoPreview");
+  const certificadoCargaHoraria = document.getElementById("certificadoCargaHoraria");
+  const certificadoRegraEmissao = document.getElementById("certificadoRegraEmissao");
+  const certificadoFrequenciaBox = document.getElementById("certificadoFrequenciaBox");
+  const certificadoFrequenciaMinima = document.getElementById("certificadoFrequenciaMinima");
+  const certificadoCamposContainer = document.getElementById("certificadoCamposContainer");
+
+  certificadoAtivo.addEventListener("change", () => {
+    certificadoConfigBox.classList.toggle("hidden", !certificadoAtivo.checked);
+  });
+  certificadoRegraEmissao.addEventListener("change", () => {
+    certificadoFrequenciaBox.classList.toggle("hidden", certificadoRegraEmissao.value !== "frequencia_minima");
+  });
+
+  function linhaCampoCertificado(campo) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "campo-row-wrapper";
+    wrapper.dataset.tag = campo.tag;
+    wrapper.innerHTML = `
+      <div class="campo-row">
+        <label style="flex:1; min-width:140px; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" class="certcampo-ativo" ${campo.ativo ? "checked" : ""}> ${escapeHtml(campo.label)}
+        </label>
+        <input type="number" class="certcampo-x" value="${campo.x}" step="0.5" title="Posição X (mm)" style="width:70px;">
+        <input type="number" class="certcampo-y" value="${campo.y}" step="0.5" title="Posição Y (mm)" style="width:70px;">
+        <input type="number" class="certcampo-tamanho" value="${campo.tamanho}" min="6" max="72" title="Tamanho da fonte (pt)" style="width:60px;">
+        <select class="certcampo-alinhamento" title="Alinhamento">
+          <option value="esquerda" ${campo.alinhamento === "esquerda" ? "selected" : ""}>Esquerda</option>
+          <option value="centro" ${campo.alinhamento === "centro" ? "selected" : ""}>Centro</option>
+          <option value="direita" ${campo.alinhamento === "direita" ? "selected" : ""}>Direita</option>
+        </select>
+      </div>
+    `;
+    certificadoCamposContainer.appendChild(wrapper);
+  }
+
+  function preencherCertificado(ev) {
+    const cert = ev?.certificado || {};
+    certificadoAtivo.checked = !!cert.ativo;
+    certificadoConfigBox.classList.toggle("hidden", !cert.ativo);
+    certificadoFundoInput.value = "";
+    if (cert.imagem_fundo_url) {
+      certificadoFundoPreview.src = cert.imagem_fundo_url;
+      certificadoFundoPreview.classList.remove("hidden");
+    } else {
+      certificadoFundoPreview.classList.add("hidden");
+    }
+    certificadoCargaHoraria.value = cert.carga_horaria != null ? cert.carga_horaria : 8;
+    certificadoRegraEmissao.value = cert.regra_emissao || "credenciado";
+    certificadoFrequenciaMinima.value = cert.frequencia_minima_pct != null ? cert.frequencia_minima_pct : 75;
+    certificadoFrequenciaBox.classList.toggle("hidden", certificadoRegraEmissao.value !== "frequencia_minima");
+
+    certificadoCamposContainer.innerHTML = "";
+    const camposSalvos = new Map((cert.campos || []).map(c => [c.tag, c]));
+    CERTIFICADO_CAMPOS_PADRAO.forEach(padrao => {
+      linhaCampoCertificado({ ...padrao, ...(camposSalvos.get(padrao.tag) || {}) });
+    });
+  }
+
+  certificadoFundoInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    certificadoFundoPreview.src = URL.createObjectURL(file);
+    certificadoFundoPreview.classList.remove("hidden");
+  });
 
   document.getElementById("inscricaoLogoInput").addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -1108,11 +1233,28 @@
       patrocinadores,
     };
 
+    const certificadoCampos = [...certificadoCamposContainer.querySelectorAll(".campo-row-wrapper")].map(wrapper => ({
+      tag: wrapper.dataset.tag,
+      ativo: wrapper.querySelector(".certcampo-ativo").checked,
+      x: parseFloat(wrapper.querySelector(".certcampo-x").value) || 0,
+      y: parseFloat(wrapper.querySelector(".certcampo-y").value) || 0,
+      tamanho: parseInt(wrapper.querySelector(".certcampo-tamanho").value) || 12,
+      alinhamento: wrapper.querySelector(".certcampo-alinhamento").value,
+    }));
+    const certificado = {
+      ativo: certificadoAtivo.checked,
+      imagem_fundo_url: eventoEditando?.certificado?.imagem_fundo_url || null,
+      carga_horaria: parseFloat(certificadoCargaHoraria.value) || 0,
+      regra_emissao: certificadoRegraEmissao.value,
+      frequencia_minima_pct: parseFloat(certificadoFrequenciaMinima.value) || 0,
+      campos: certificadoCampos,
+    };
+
     try {
       let eventoId = idEditando;
       if (!eventoId) {
         const ref = await db.collection("eventos").add({
-          nome, data, local, salas, branding, inscricao, controle_entrada_saida,
+          nome, data, local, salas, branding, inscricao, controle_entrada_saida, certificado,
           criado_em: firebase.firestore.FieldValue.serverTimestamp(),
           criado_por: usuarioAtual.uid,
         });
@@ -1129,8 +1271,15 @@
           patrocinadores[i].logo_url = await enviarArquivoStorage(`logos/${eventoId}/patrocinador-${i}-${Date.now()}`, patrocinadorWrappers[i]._arquivoPendente);
         }
       }
+      // Fundo do certificado reaproveita o mesmo caminho/regra de storage dos
+      // logos (logos/{eventoId}/...) — evita precisar de uma regra nova no
+      // storage.rules só pra esse arquivo.
+      const certificadoFundoFile = certificadoFundoInput.files[0];
+      if (certificadoFundoFile) {
+        certificado.imagem_fundo_url = await enviarArquivoStorage(`logos/${eventoId}/certificado-fundo-${Date.now()}`, certificadoFundoFile);
+      }
 
-      await db.collection("eventos").doc(eventoId).set({ nome, data, local, salas, branding, inscricao, controle_entrada_saida }, { merge: true });
+      await db.collection("eventos").doc(eventoId).set({ nome, data, local, salas, branding, inscricao, controle_entrada_saida, certificado }, { merge: true });
 
       modalOverlay.classList.add("hidden");
       carregarEventos();
@@ -1157,6 +1306,7 @@
   let consultaParticipantesCache = new Map();
   let consultaSalasPorId = new Map();
   let consultaLogsPorParticipante = new Map(); // codigo -> [{ts, sala}]
+  let consultaEventoAtual = null;
 
   function dataYMD(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1216,6 +1366,7 @@
       opt.value = d.id;
       opt.textContent = ev.nome;
       opt.dataset.salas = JSON.stringify(ev.salas || []);
+      opt.dataset.evento = JSON.stringify(ev);
       consultaEventoSelect.appendChild(opt);
     });
   });
@@ -1244,6 +1395,7 @@
 
     const opt = consultaEventoSelect.selectedOptions[0];
     const salas = JSON.parse(opt.dataset.salas || "[]");
+    consultaEventoAtual = { id: eventoId, ...JSON.parse(opt.dataset.evento || "{}") };
     consultaSalasPorId = new Map(salas.map(s => [s.id, s.nome]));
     salas.forEach(s => {
       const o = document.createElement("option");
@@ -1394,6 +1546,122 @@
     renderizarResultadosConsulta(listaExibidaComBusca(), 50);
   });
 
+  // ---------- GERAÇÃO DE CERTIFICADO (Fase 5) ----------
+  // Mesma lógica usada em certificado.html (autoatendimento) — mantidas em
+  // sincronia manualmente, já que os arquivos não compartilham módulos JS.
+  async function calcularPresencaTotalMsEvento(eventoId, codigo) {
+    const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+      .where("participante_id", "==", codigo).get();
+    const porSala = new Map();
+    snap.forEach(d => {
+      const data = d.data();
+      const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+      const arr = porSala.get(data.sala) || [];
+      arr.push({ ts, tipo: data.tipo || "entrada" });
+      porSala.set(data.sala, arr);
+    });
+    let totalMs = 0;
+    porSala.forEach(logs => {
+      logs.sort((a, b) => a.ts - b.ts);
+      let aberto = null;
+      logs.forEach(l => {
+        if (l.tipo === "entrada") { if (aberto === null) aberto = l.ts; }
+        else if (aberto !== null) { totalMs += l.ts - aberto; aberto = null; }
+      });
+    });
+    return totalMs;
+  }
+
+  async function verificarElegibilidadeCertificado(evento, eventoId, codigo) {
+    const cert = evento.certificado || {};
+    if (!cert.ativo) {
+      return { elegivel: false, motivo: "Certificado não está disponível pra este evento." };
+    }
+    if (cert.regra_emissao === "frequencia_minima") {
+      if (!evento.controle_entrada_saida) {
+        return { elegivel: false, motivo: "Este evento exige frequência mínima, mas não registra entrada/saída — fale com a organização." };
+      }
+      const totalMs = await calcularPresencaTotalMsEvento(eventoId, codigo);
+      const cargaHorariaMs = (cert.carga_horaria || 0) * 60 * 60 * 1000;
+      const minimoMs = cargaHorariaMs * ((cert.frequencia_minima_pct || 0) / 100);
+      if (cargaHorariaMs === 0 || totalMs < minimoMs) {
+        const percentualObtido = cargaHorariaMs > 0 ? Math.round((totalMs / cargaHorariaMs) * 100) : 0;
+        return { elegivel: false, motivo: `Frequência insuficiente: ${percentualObtido}% da carga horária (mínimo exigido: ${cert.frequencia_minima_pct}%).` };
+      }
+      return { elegivel: true };
+    }
+    const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+      .where("participante_id", "==", codigo).limit(1).get();
+    if (snap.empty) {
+      return { elegivel: false, motivo: "Nenhum check-in encontrado pra este participante neste evento." };
+    }
+    return { elegivel: true };
+  }
+
+  function alinhamentoParaJsPdf(al) {
+    return al === "esquerda" ? "left" : al === "direita" ? "right" : "center";
+  }
+
+  function formatoImagemParaJsPdf(dataUrl) {
+    if (dataUrl.startsWith("data:image/png")) return "PNG";
+    if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+    return "JPEG";
+  }
+
+  async function carregarImagemComoDataUrl(url) {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function gerarCertificadoPdf(evento, participante) {
+    const cert = evento.certificado || {};
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    if (cert.imagem_fundo_url) {
+      try {
+        const dataUrl = await carregarImagemComoDataUrl(cert.imagem_fundo_url);
+        pdf.addImage(dataUrl, formatoImagemParaJsPdf(dataUrl), 0, 0, 297, 210, undefined, "FAST");
+      } catch (e) {
+        console.warn("Não foi possível carregar a imagem de fundo do certificado:", e.message);
+      }
+    }
+
+    const valores = {
+      nome: participante.nome_cracha || participante.nome || participante.codigo,
+      nome_evento: evento.nome || "",
+      local_evento: evento.local || "",
+      data_evento: formatarData(evento.data),
+      carga_horaria: cert.carga_horaria ? `${cert.carga_horaria}h` : "",
+    };
+
+    (cert.campos || []).forEach(campo => {
+      if (!campo.ativo) return;
+      const texto = valores[campo.tag];
+      if (!texto) return;
+      pdf.setFontSize(campo.tamanho || 12);
+      pdf.text(String(texto), campo.x, campo.y, { align: alinhamentoParaJsPdf(campo.alinhamento) });
+    });
+
+    return pdf;
+  }
+
+  async function baixarCertificado(evento, eventoId, participante) {
+    const { elegivel, motivo } = await verificarElegibilidadeCertificado(evento, eventoId, participante.codigo);
+    if (!elegivel) {
+      alert(motivo);
+      return;
+    }
+    const pdf = await gerarCertificadoPdf(evento, participante);
+    pdf.save(`certificado-${(participante.nome_cracha || participante.nome || participante.codigo).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
+  }
+
   async function mostrarHistoricoParticipante(participante) {
     const eventoId = consultaEventoSelect.value;
     consultaHistorico.classList.remove("hidden");
@@ -1408,10 +1676,12 @@
         return { ts, sala: consultaSalasPorId.get(data.sala) || data.sala_nome || data.sala };
       }).sort((a, b) => b.ts - a.ts);
 
+      const certificadoDisponivel = !!consultaEventoAtual?.certificado?.ativo;
       const acoesHtml = `
         <div class="consulta-acoes">
           <button class="btn small secondary" id="btnEditarParticipante">Editar dados</button>
           <button class="btn small secondary" id="btnImprimirEtiquetaConsulta">Imprimir etiqueta</button>
+          ${certificadoDisponivel ? '<button class="btn small secondary" id="btnBaixarCertificadoConsulta">Baixar certificado</button>' : ""}
           <button class="btn small secondary" id="btnExcluirParticipante" style="color: var(--err);">Excluir dados (LGPD)</button>
         </div>
       `;
@@ -1437,6 +1707,9 @@
       document.getElementById("btnImprimirEtiquetaConsulta").addEventListener("click", () => imprimirEtiqueta(eventoId, participante));
       document.getElementById("btnExcluirParticipante").addEventListener("click", () => excluirParticipanteLgpd(eventoId, participante));
       document.getElementById("btnEditarParticipante").addEventListener("click", () => mostrarFormularioEdicao(eventoId, participante));
+      if (certificadoDisponivel) {
+        document.getElementById("btnBaixarCertificadoConsulta").addEventListener("click", () => baixarCertificado(consultaEventoAtual, eventoId, participante));
+      }
     } catch (e) {
       consultaHistorico.innerHTML = `<div class='empty-state'>Erro ao carregar histórico: ${e.message}</div>`;
     }

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificado</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d24;
+    --panel2: #22262f;
+    --border: #2a2e38;
+    --text: #eef0f3;
+    --muted: #8b93a3;
+    --ok: #2fbf71;
+    --err: #e0533d;
+    --accent: #4f8cff;
+    --accent-hover: #3d7ae0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  .hidden { display: none !important; }
+
+  .center-screen {
+    min-height: 70vh; width: 100%; max-width: 440px;
+    display: flex; flex-direction: column; justify-content: center;
+    align-items: center; text-align: center; gap: 14px;
+  }
+  .center-screen h1 { font-size: 19px; margin: 0; }
+  .center-screen p { color: var(--muted); font-size: 14px; margin: 0; }
+  .box {
+    width: 100%; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+
+  .field { margin-bottom: 14px; text-align: left; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    width: 100%; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+
+  .btn {
+    width: 100%; padding: 12px; border: none; border-radius: 8px;
+    background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .resultado { margin-top: 16px; padding: 14px; border-radius: 10px; font-size: 14px; text-align: left; }
+  .resultado.ok { background: #10281c; border: 1px solid var(--ok); color: var(--ok); }
+  .resultado.err { background: #2b1512; border: 1px solid var(--err); color: var(--err); }
+</style>
+</head>
+<body>
+
+  <div id="telaCarregando" class="center-screen"><p>Carregando…</p></div>
+
+  <div id="telaErro" class="center-screen hidden">
+    <div class="box">
+      <h1>Não foi possível abrir o certificado</h1>
+      <p id="telaErroMsg"></p>
+    </div>
+  </div>
+
+  <div id="telaIndisponivel" class="center-screen hidden">
+    <div class="box">
+      <h1>Certificado indisponível</h1>
+      <p>Este evento ainda não tem emissão de certificado habilitada. Fale com a organização.</p>
+    </div>
+  </div>
+
+  <div id="telaBusca" class="center-screen hidden">
+    <div class="box">
+      <h1 id="eventoNomeTitulo"></h1>
+      <p style="margin-bottom: 18px;">Digite o código do seu crachá pra baixar o certificado.</p>
+      <div class="field">
+        <label>Código do crachá</label>
+        <input type="text" id="codigoInput" placeholder="Ex: A1B2C3" autocomplete="off">
+      </div>
+      <button type="button" class="btn" id="btnBuscar">Buscar certificado</button>
+      <div id="resultado" class="hidden"></div>
+    </div>
+  </div>
+
+<!-- ====================== FIREBASE ====================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDOj-DrSShS0mTCKsHCPI57zYQx1hAGDsA",
+    authDomain: "checkin-de-participantes.firebaseapp.com",
+    projectId: "checkin-de-participantes",
+    storageBucket: "checkin-de-participantes.firebasestorage.app",
+    messagingSenderId: "146226402909",
+    appId: "1:146226402909:web:50f7f5c95a366894439fb4"
+  };
+  // App nomeado (não o "[DEFAULT]") — mesma razão do checkin.html/inscricao.html:
+  // isola o login anônimo daqui da sessão do Master aberta em admin.html na
+  // mesma origem (ver memória do projeto sobre o bug de sessão cross-tab).
+  const certificadoApp = firebase.initializeApp(firebaseConfig, "certificado");
+  const auth = certificadoApp.auth();
+  const db = certificadoApp.firestore();
+
+  const params = new URLSearchParams(location.search);
+  const eventoId = params.get("evento");
+  let eventoAtual = null;
+
+  const telas = ["telaCarregando", "telaErro", "telaIndisponivel", "telaBusca"];
+  function mostrarTela(id) {
+    telas.forEach(t => document.getElementById(t).classList.toggle("hidden", t !== id));
+  }
+  function mostrarErro(msg) {
+    document.getElementById("telaErroMsg").textContent = msg;
+    mostrarTela("telaErro");
+  }
+
+  async function iniciar() {
+    if (!eventoId) {
+      mostrarErro('Este link está incompleto: falta o parâmetro "evento" na URL.');
+      return;
+    }
+    try {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+      await auth.signInAnonymously();
+    } catch (e) {
+      mostrarErro("Não foi possível conectar ao Firebase: " + e.message);
+      return;
+    }
+    try {
+      const doc = await db.collection("eventos").doc(eventoId).get();
+      if (!doc.exists) { mostrarErro("Evento não encontrado. Verifique o link."); return; }
+      eventoAtual = { id: doc.id, ...doc.data() };
+    } catch (e) {
+      mostrarErro("Não foi possível carregar o evento. Verifique sua conexão.");
+      return;
+    }
+
+    if (!eventoAtual.certificado || !eventoAtual.certificado.ativo) {
+      mostrarTela("telaIndisponivel");
+      return;
+    }
+
+    document.getElementById("eventoNomeTitulo").textContent = eventoAtual.nome || "";
+    mostrarTela("telaBusca");
+    document.getElementById("codigoInput").focus();
+  }
+
+  // ---------- geração do certificado ----------
+  // Mesma lógica de admin.html (Consultar presença > Baixar certificado) —
+  // mantidas em sincronia manualmente, já que os arquivos não compartilham
+  // módulos JS.
+  function formatarData(iso) {
+    if (!iso) return "";
+    const [ano, mes, dia] = iso.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  async function calcularPresencaTotalMsEvento(codigo) {
+    const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+      .where("participante_id", "==", codigo).get();
+    const porSala = new Map();
+    snap.forEach(d => {
+      const data = d.data();
+      const ts = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp_local);
+      const arr = porSala.get(data.sala) || [];
+      arr.push({ ts, tipo: data.tipo || "entrada" });
+      porSala.set(data.sala, arr);
+    });
+    let totalMs = 0;
+    porSala.forEach(logs => {
+      logs.sort((a, b) => a.ts - b.ts);
+      let aberto = null;
+      logs.forEach(l => {
+        if (l.tipo === "entrada") { if (aberto === null) aberto = l.ts; }
+        else if (aberto !== null) { totalMs += l.ts - aberto; aberto = null; }
+      });
+    });
+    return totalMs;
+  }
+
+  async function verificarElegibilidadeCertificado(codigo) {
+    const cert = eventoAtual.certificado || {};
+    if (cert.regra_emissao === "frequencia_minima") {
+      if (!eventoAtual.controle_entrada_saida) {
+        return { elegivel: false, motivo: "Este evento exige frequência mínima, mas não registra entrada/saída — fale com a organização." };
+      }
+      const totalMs = await calcularPresencaTotalMsEvento(codigo);
+      const cargaHorariaMs = (cert.carga_horaria || 0) * 60 * 60 * 1000;
+      const minimoMs = cargaHorariaMs * ((cert.frequencia_minima_pct || 0) / 100);
+      if (cargaHorariaMs === 0 || totalMs < minimoMs) {
+        const percentualObtido = cargaHorariaMs > 0 ? Math.round((totalMs / cargaHorariaMs) * 100) : 0;
+        return { elegivel: false, motivo: `Frequência insuficiente: ${percentualObtido}% da carga horária (mínimo exigido: ${cert.frequencia_minima_pct}%).` };
+      }
+      return { elegivel: true };
+    }
+    const snap = await db.collection("checkins").doc(eventoId).collection("logs")
+      .where("participante_id", "==", codigo).limit(1).get();
+    if (snap.empty) {
+      return { elegivel: false, motivo: "Nenhum check-in encontrado pra este código neste evento." };
+    }
+    return { elegivel: true };
+  }
+
+  function alinhamentoParaJsPdf(al) {
+    return al === "esquerda" ? "left" : al === "direita" ? "right" : "center";
+  }
+
+  function formatoImagemParaJsPdf(dataUrl) {
+    if (dataUrl.startsWith("data:image/png")) return "PNG";
+    if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+    return "JPEG";
+  }
+
+  async function carregarImagemComoDataUrl(url) {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function gerarCertificadoPdf(participante) {
+    const cert = eventoAtual.certificado || {};
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    if (cert.imagem_fundo_url) {
+      try {
+        const dataUrl = await carregarImagemComoDataUrl(cert.imagem_fundo_url);
+        pdf.addImage(dataUrl, formatoImagemParaJsPdf(dataUrl), 0, 0, 297, 210, undefined, "FAST");
+      } catch (e) {
+        console.warn("Não foi possível carregar a imagem de fundo do certificado:", e.message);
+      }
+    }
+
+    const valores = {
+      nome: participante.nome_cracha || participante.nome || participante.codigo,
+      nome_evento: eventoAtual.nome || "",
+      local_evento: eventoAtual.local || "",
+      data_evento: formatarData(eventoAtual.data),
+      carga_horaria: cert.carga_horaria ? `${cert.carga_horaria}h` : "",
+    };
+
+    (cert.campos || []).forEach(campo => {
+      if (!campo.ativo) return;
+      const texto = valores[campo.tag];
+      if (!texto) return;
+      pdf.setFontSize(campo.tamanho || 12);
+      pdf.text(String(texto), campo.x, campo.y, { align: alinhamentoParaJsPdf(campo.alinhamento) });
+    });
+
+    return pdf;
+  }
+
+  function mostrarResultado(tipo, texto) {
+    const el = document.getElementById("resultado");
+    el.className = "resultado " + tipo;
+    el.textContent = texto;
+  }
+
+  const btnBuscar = document.getElementById("btnBuscar");
+  const codigoInput = document.getElementById("codigoInput");
+
+  async function buscarEBaixar() {
+    const codigo = codigoInput.value.trim();
+    if (!codigo) return;
+    btnBuscar.disabled = true;
+    btnBuscar.textContent = "Buscando…";
+    try {
+      const doc = await db.collection("participantes").doc(eventoId).collection("lista").doc(codigo).get();
+      if (!doc.exists) {
+        mostrarResultado("err", "Código não encontrado. Confira o código impresso no seu crachá.");
+        return;
+      }
+      const participante = { codigo, ...doc.data() };
+      const { elegivel, motivo } = await verificarElegibilidadeCertificado(codigo);
+      if (!elegivel) {
+        mostrarResultado("err", motivo);
+        return;
+      }
+      const pdf = await gerarCertificadoPdf(participante);
+      pdf.save(`certificado-${(participante.nome_cracha || participante.nome || codigo).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`);
+      mostrarResultado("ok", "Certificado gerado! O download deve começar automaticamente.");
+    } catch (e) {
+      mostrarResultado("err", "Erro ao gerar o certificado: " + e.message);
+    } finally {
+      btnBuscar.disabled = false;
+      btnBuscar.textContent = "Buscar certificado";
+    }
+  }
+
+  btnBuscar.addEventListener("click", buscarEBaixar);
+  codigoInput.addEventListener("keydown", (e) => { if (e.key === "Enter") buscarEBaixar(); });
+
+  iniciar();
+</script>
+</body>
+</html>

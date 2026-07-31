@@ -7,9 +7,13 @@ service firebase.storage {
     // (feito pelo admin.html). Escopado por evento.
     match /logos/{eventoId}/{arquivo} {
       allow read: if true;
-      allow write: if request.auth != null
+      // create/update passam por validação de tamanho/tipo; delete não tem
+      // request.resource (não é upload), então precisa de uma condição própria
+      // — sem isso, "allow write" com essas checagens bloqueava qualquer exclusão.
+      allow create, update: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
     }
   }
 }
